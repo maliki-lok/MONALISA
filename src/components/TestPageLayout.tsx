@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   ArrowLeft, User, Shield, Key, CheckCircle, Menu, X, Settings, 
   Building2, Users, ClipboardList, BarChart3, Mail, Briefcase, 
-  TrendingUp, FileText, LogOut, AlertTriangle, Lock 
+  TrendingUp, FileText, LogOut, AlertTriangle, Lock, Info 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import path from 'path';
 
 // --- DEFINISI MENU SIDEBAR ---
 const menuItems = [
@@ -38,6 +39,7 @@ const menuItems = [
   { path: '/test/bimkemas', permission: 'access_bimkemas', label: 'Bimkemas', icon: Users },
   { path: '/test/tpp', permission: 'access_tpp', label: 'TPP', icon: TrendingUp },
   { path: '/test/laporan', permission: 'access_laporan', label: 'Laporan', icon: FileText },
+  { path: '/about', permission:'access_admin', label: 'About', icon: Info},
 ];
 
 interface TestPageLayoutProps {

@@ -24,7 +24,8 @@ import {
   X,
   Activity,
   Loader2,
-  Users
+  Users,
+  Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -40,7 +41,8 @@ import {
   Pie,
   Cell,
   AreaChart,
-  Area
+  Area,
+  Label
 } from 'recharts';
 // IMPORT BARU: AlertDialog
 import {
@@ -54,6 +56,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { permission } from 'process';
 
 // Definisi menu item
 const menuItems = [
@@ -69,6 +72,7 @@ const menuItems = [
   { path: '/test/bimkemas', permission: 'access_bimkemas', label: 'Bimkemas', icon: Users },
   { path: '/test/tpp', permission: 'access_tpp', label: 'TPP', icon: TrendingUp },
   { path: '/test/laporan', permission: 'access_laporan', label: 'Laporan', icon: FileText },
+  { path: '/about', permission:'access_admin', label: 'About', icon: Info},
 ];
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];

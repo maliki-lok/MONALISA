@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Unauthorized from "./pages/Unauthorized";
 import NotFound from "./pages/NotFound";
 import AdminPage from "./pages/admin";
+import About from "./pages/About";
 
 // Test Pages
 import AdminTest from "./pages/test/AdminTest";
@@ -160,6 +161,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/about" element={<About/>}/>
 
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
