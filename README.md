@@ -1,7 +1,3 @@
-Tentu, ini adalah draf file `README.md` yang lengkap dan profesional untuk proyek **MONALISA** Anda. File ini mencakup deskripsi proyek, teknologi yang digunakan, fitur berdasarkan role, struktur database, dan cara instalasi.
-
-Silakan buat file bernama `README.md` di root folder proyek Anda dan salin isi berikut:
-
 ```markdown
 # MONALISA - Sistem Informasi Manajemen Bapas
 
