@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -168,12 +168,13 @@ export default function Login() {
                 {/* Input Password */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                     <Label htmlFor="password" className={validationErrors.password ? 'text-destructive' : ''}>
+                    <Label htmlFor="password" className={validationErrors.password ? 'text-destructive' : ''}>
                         Password
-                     </Label>
-                     <a href="#" className="text-xs text-primary hover:underline font-medium">
+                    </Label>
+                    {/* Change this line: */}
+                    <Link to="/forgot-password" className="text-xs text-primary hover:underline font-medium">
                         Lupa password?
-                     </a>
+                    </Link>
                   </div>
                   
                   <div className="relative group">

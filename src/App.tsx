@@ -13,7 +13,10 @@ import Unauthorized from "./pages/Unauthorized";
 import NotFound from "./pages/NotFound";
 import AdminPage from "./pages/admin";
 import About from "./pages/About";
+
+//Auth
 import UpdatePasswordPage from "./pages/auth/UpdatePassword";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 
 // Test Pages
 import AdminTest from "./pages/test/AdminTest";
@@ -43,6 +46,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/update-password" element={<UpdatePasswordPage />} />
 
             {/* Protected Routes */}
