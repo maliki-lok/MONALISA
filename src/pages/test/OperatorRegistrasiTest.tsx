@@ -29,7 +29,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
-// Types
+// Types (Adjust path if needed based on your project structure)
 import { PetugasPK, UPT, Klien } from '@/types/auth';
 
 const JENIS_LITMAS = ["Integrasi PB", "Integrasi CB", "Integrasi CMB", "Asimilasi", "Perawatan Tahanan", "Lainnya"];
@@ -79,7 +79,6 @@ export default function OperatorRegistrasiTest() {
   const [hitungUsia, setHitungUsia] = useState("");
   const [hitungKategori, setHitungKategori] = useState("");
   const [usiaWarning, setUsiaWarning] = useState<string | null>(null);
-  // NEW STATE: Mencegah simpan jika role tidak sesuai
   const [isCategoryMismatch, setIsCategoryMismatch] = useState(false); 
 
   // --- HELPER: CALCULATE AGE & VALIDATE ROLE ---
@@ -102,7 +101,7 @@ export default function OperatorRegistrasiTest() {
     const kategoriByAge = age < 18 ? "Anak" : "Dewasa";
     setHitungKategori(kategoriByAge);
 
-    // LOGIKA PEMBATASAN PENYIMPANAN (VALIDASI KETAT)
+    // LOGIKA PEMBATASAN PENYIMPANAN
     let mismatch = false;
     
     if (isOpAnak && age >= 18) {
@@ -190,7 +189,7 @@ export default function OperatorRegistrasiTest() {
     }
   };
 
-  // --- HANDLE VIEW DETAIL (POP UP) ---
+  // --- HANDLE VIEW DETAIL ---
   const handleViewDetail = async (id_klien: number) => {
     setLoading(true);
     try {
@@ -220,7 +219,7 @@ export default function OperatorRegistrasiTest() {
     }
   };
 
-  // --- ACTIONS: EDIT MODE (AUTO FILL) ---
+  // --- EDIT MODE ACTIONS ---
   const handleEditClick = async (klienSimple: Klien) => {
     setLoading(true);
     try {
@@ -276,7 +275,9 @@ export default function OperatorRegistrasiTest() {
   useEffect(() => { fetchReferences(); }, [isOpAnak, isOpDewasa]);
   useEffect(() => { if (activeTab === 'list_data') fetchTableData(); }, [activeTab]);
 
-  // --- HANDLER SAVE: TAB 1 (KLIEN + PERKARA) ---
+  // --- SAVE HANDLERS ---
+
+  // 1. Klien & Perkara
   const handleSaveKlienPerkara = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isCategoryMismatch) {
@@ -313,7 +314,6 @@ export default function OperatorRegistrasiTest() {
         const { error: kError } = await supabase.from('klien').update(payloadKlien).eq('id_klien', editingKlien.id_klien);
         if (kError) throw new Error(kError.message);
 
-        // Update Perkara (Jika ada Litmas terkait)
         if (editingLitmas && editingPerkara) {
              const payloadPerkara = {
                 pasal: formData.get('pasal') as string,
@@ -325,12 +325,7 @@ export default function OperatorRegistrasiTest() {
                 tanggal_mulai_ditahan: (formData.get('tanggal_mulai_ditahan') as string) || null,
                 tanggal_ekspirasi: (formData.get('tanggal_ekspirasi') as string) || null,
              };
-             
-             const { error: pError } = await supabase
-                .from('perkara')
-                .update(payloadPerkara)
-                .eq('id_litmas', editingLitmas.id_litmas);
-             
+             const { error: pError } = await supabase.from('perkara').update(payloadPerkara).eq('id_litmas', editingLitmas.id_litmas);
              if (pError) console.error("Gagal update perkara", pError);
         }
 
@@ -357,14 +352,13 @@ export default function OperatorRegistrasiTest() {
     }
   };
 
-  // --- HANDLER SAVE: TAB 2 (PENJAMIN) ---
+  // 2. Penjamin
   const handleSavePenjamin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedClientId) return toast({ variant: "destructive", title: "Error", description: "Pilih Klien dulu." });
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     
-    // SESUAIKAN DENGAN TABLE PUBLIC.PENJAMIN
     const payload = {
         id_klien: selectedClientId,
         nama_penjamin: formData.get('nama_penjamin') as string,
@@ -399,7 +393,7 @@ export default function OperatorRegistrasiTest() {
     }
   };
 
-  // --- HANDLER SAVE: TAB 3 (LITMAS) ---
+  // 3. Litmas (Include NOTIFIKASI WA)
   const handleSaveLitmas = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedClientId) return toast({ variant: "destructive", title: "Error", description: "Pilih Klien dulu." });
@@ -408,11 +402,10 @@ export default function OperatorRegistrasiTest() {
     const tempDataPerkara = JSON.parse(sessionStorage.getItem('temp_perkara_data') || '{}');
     
     try {
-      // SESUAIKAN DENGAN TABLE PUBLIC.LITMAS
       const payloadLitmas = {
         id_klien: selectedClientId,
         id_upt: formData.get('id_upt') ? Number(formData.get('id_upt')) : null,
-        nama_pk: selectedPkId, // Dari State (Dropdown)
+        nama_pk: selectedPkId, 
         
         nomor_urut: formData.get('nomor_urut') ? Number(formData.get('nomor_urut')) : null,
         nomor_surat_masuk: formData.get('nomor_surat_masuk') as string,
@@ -429,8 +422,8 @@ export default function OperatorRegistrasiTest() {
         nomor_surat_pelimpahan: formData.get('nomor_surat_pelimpahan') as string,
         tanggal_surat_pelimpahan: (formData.get('tanggal_surat_pelimpahan') as string) || null,
         
-        waktu_registrasi: new Date().toISOString(), // Otomatis terisi
-        waktu_tunjuk_pk: new Date().toISOString()   // Karena langsung tunjuk PK
+        waktu_registrasi: new Date().toISOString(),
+        waktu_tunjuk_pk: new Date().toISOString()
       };
 
       if(editingLitmas) {
@@ -441,10 +434,11 @@ export default function OperatorRegistrasiTest() {
          setActiveTab("list_data");
          fetchTableData();
       } else {
+         // --- INSERT BARU ---
          const { data: litmasData, error: litmasError } = await supabase.from('litmas').insert(payloadLitmas).select('id_litmas').single();
          if (litmasError) throw new Error(litmasError.message);
 
-         // Insert Perkara (from Tab 1 temporary data)
+         // Insert Perkara
          if (tempDataPerkara.pasal || tempDataPerkara.nomor_putusan) {
             await supabase.from('perkara').insert({
               id_litmas: litmasData.id_litmas,
@@ -458,6 +452,29 @@ export default function OperatorRegistrasiTest() {
               tanggal_ekspirasi: (tempDataPerkara.tanggal_ekspirasi as string) || null,
             });
          }
+
+         // === TRIGGER NOTIFIKASI WA VIA EDGE FUNCTION ===
+         if (selectedPkId) {
+             const selectedKlienData = listKlien.find(k => k.id_klien === selectedClientId);
+             try {
+                // Jangan await agar tidak blocking UI (fire and forget)
+                supabase.functions.invoke('send-new-task-notification', {
+                    body: {
+                        pk_id: selectedPkId,
+                        nama_klien: selectedKlienData?.nama_klien || 'Tanpa Nama',
+                        jenis_litmas: payloadLitmas.jenis_litmas,
+                        nomor_surat: payloadLitmas.nomor_surat_permintaan
+                    }
+                }).then(({ error }) => {
+                    if (error) console.error("Gagal mengirim WA:", error);
+                    else console.log("Notifikasi WA terkirim.");
+                });
+             } catch (notifErr) {
+                 console.error("Error trigger notification:", notifErr);
+             }
+         }
+         // ==============================================
+
          toast({ title: "Selesai", description: "Registrasi Litmas berhasil." });
          sessionStorage.removeItem('temp_perkara_data');
          setSelectedClientId(null);
@@ -472,7 +489,7 @@ export default function OperatorRegistrasiTest() {
     }
   };
 
-  // Sub-components (ClientSelector & PKSelector) - TIDAK ADA PERUBAHAN
+  // Sub-components
   const ClientSelector = () => {
     const selectedClient = listKlien.find((k) => k.id_klien === selectedClientId);
     return (
@@ -690,7 +707,6 @@ export default function OperatorRegistrasiTest() {
                  <div className="flex justify-end pt-4 gap-2">
                    {editingKlien && <Button type="button" variant="ghost" onClick={handleCancelEdit}>Batal</Button>}
                    
-                   {/* TOMBOL SIMPAN DIMATIKAN JIKA MISMATCH */}
                    <Button 
                       type="submit" 
                       size="lg" 
@@ -713,7 +729,6 @@ export default function OperatorRegistrasiTest() {
                 <form key={editingPenjamin ? `edit-penjamin-${editingPenjamin.id}` : 'new-penjamin'} onSubmit={handleSavePenjamin} className="space-y-6 max-w-3xl mx-auto">
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200"><ClientSelector /></div>
                     <div className={cn("space-y-6 transition-opacity duration-300", !selectedClientId && "opacity-50 pointer-events-none")}>
-                        {/* UPDATE: Form lengkap sesuai tabel penjamin */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="grid gap-2 col-span-2"><Label>Nama Penjamin</Label><Input name="nama_penjamin" defaultValue={editingPenjamin?.nama_penjamin || ''} required /></div>
                             
@@ -748,26 +763,21 @@ export default function OperatorRegistrasiTest() {
                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200"><ClientSelector /></div>
                  <div className={cn("space-y-6 transition-opacity duration-300", !selectedClientId && "opacity-50 pointer-events-none")}>
                    
-                   {/* UPDATE: Form Lengkap Litmas */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     {/* Kelompok 1: Data Dasar */}
                      <div className="grid gap-2"><Label>Jenis Litmas</Label><Select name="jenis_litmas" defaultValue={editingLitmas?.jenis_litmas || undefined} required><SelectTrigger><SelectValue placeholder="Pilih Jenis..." /></SelectTrigger><SelectContent>{JENIS_LITMAS.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}</SelectContent></Select></div>
                      <div className="grid gap-2"><Label>Asal UPT</Label><Select name="id_upt" defaultValue={editingLitmas?.id_upt ? String(editingLitmas.id_upt) : undefined}><SelectTrigger><SelectValue placeholder="Pilih UPT..." /></SelectTrigger><SelectContent>{listUPT.map((upt) => (<SelectItem key={upt.id_upt} value={String(upt.id_upt)}>{upt.nama_upt}</SelectItem>))}</SelectContent></Select></div>
                      
-                     {/* Kelompok 2: Registrasi Bapas */}
                      <div className="grid gap-2"><Label>Nomor Urut</Label><Input name="nomor_urut" type="number" defaultValue={editingLitmas?.nomor_urut || ''} /></div>
                      <div className="grid gap-2"><Label>Asal Bapas</Label><Input name="asal_bapas" defaultValue={editingLitmas?.asal_bapas || 'Bapas Kelas I Jakarta Barat'} /></div>
                      <div className="grid gap-2"><Label>Tanggal Registrasi</Label><Input name="tanggal_registrasi" type="date" defaultValue={editingLitmas?.tanggal_registrasi || new Date().toISOString().split('T')[0]} /></div>
                      <div className="grid gap-2"><Label>Nomor Register Litmas</Label><Input name="nomor_register_litmas" defaultValue={editingLitmas?.nomor_register_litmas || ''} placeholder="Reg. Bapas..." /></div>
 
-                     {/* Kelompok 3: Surat Permintaan */}
                      <div className="col-span-2"><Separator className="my-2" /></div>
                      <div className="grid gap-2"><Label>No. Surat Permintaan</Label><Input name="nomor_surat_permintaan" defaultValue={editingLitmas?.nomor_surat_permintaan || ''} required /></div>
                      <div className="grid gap-2"><Label>Tgl Surat Permintaan</Label><Input name="tanggal_surat_permintaan" type="date" defaultValue={editingLitmas?.tanggal_surat_permintaan || ''} required /></div>
                      <div className="grid gap-2"><Label>Tgl Diterima Bapas</Label><Input name="tanggal_diterima_bapas" type="date" defaultValue={editingLitmas?.tanggal_diterima_bapas || ''} required /></div>
                      <div className="grid gap-2"><Label>No. Agenda Masuk</Label><Input name="nomor_surat_masuk" defaultValue={editingLitmas?.nomor_surat_masuk || ''} /></div>
 
-                     {/* Kelompok 4: Surat Pelimpahan */}
                      <div className="col-span-2"><Separator className="my-2" /></div>
                      <div className="grid gap-2"><Label>No. Surat Pelimpahan</Label><Input name="nomor_surat_pelimpahan" defaultValue={editingLitmas?.nomor_surat_pelimpahan || ''} placeholder="Jika ada..." /></div>
                      <div className="grid gap-2"><Label>Tgl Surat Pelimpahan</Label><Input name="tanggal_surat_pelimpahan" type="date" defaultValue={editingLitmas?.tanggal_surat_pelimpahan || ''} /></div>
@@ -862,7 +872,7 @@ export default function OperatorRegistrasiTest() {
         </TabsContent>
       </Tabs>
 
-      {/* --- DIALOG DETAIL (Sama seperti sebelumnya dengan Fix Scroll) --- */}
+      {/* --- DIALOG DETAIL --- */}
       <Dialog open={openDetail} onOpenChange={setOpenDetail}>
         <DialogContent className="max-w-4xl h-[90vh] p-0 flex flex-col overflow-hidden">
             <DialogHeader className="p-6 pb-2 shrink-0">
