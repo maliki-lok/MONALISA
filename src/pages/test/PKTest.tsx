@@ -556,7 +556,7 @@ export default function PKTest() {
                             <div className="ml-8 relative">
                                 <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedTask?.waktu_upload_surat_tugas ? 'bg-green-500' : 'bg-slate-200'}`}></div>
                                 <div>
-                                    <p className="text-xs font-bold text-slate-800">PK: Terima & Upload Surat Tugas</p>
+                                    <p className="text-xs font-bold text-slate-800">PK: Upload Surat Tugas</p>
                                     <p className="text-[10px] text-slate-500 mt-0.5">{formatDateTime(selectedTask?.waktu_upload_surat_tugas)}</p>
                                 </div>
                             </div>
@@ -565,7 +565,7 @@ export default function PKTest() {
                             <div className="ml-8 relative">
                                 <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedTask?.waktu_upload_laporan ? 'bg-green-500' : 'bg-slate-200'}`}></div>
                                 <div>
-                                    <p className="text-xs font-bold text-slate-800">PK: Selesai Litmas & Upload Laporan</p>
+                                    <p className="text-xs font-bold text-slate-800">PK: Upload Laporan Litmas</p>
                                     <p className="text-[10px] text-slate-500 mt-0.5">{formatDateTime(selectedTask?.waktu_upload_laporan)}</p>
                                 </div>
                             </div>
