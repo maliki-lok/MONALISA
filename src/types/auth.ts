@@ -119,6 +119,7 @@ export interface Klien {
   kecamatan?: string | null;
   nomor_telepon?: string | null;
   nik_klien?: string | null;
+  created_at?: string;
 }
 
 export interface Penjamin {
@@ -135,6 +136,7 @@ export interface Penjamin {
   alamat?: string | null;
   nomor_telepon?: string | null;
   nik_penjamin?: string | null;
+  created_at?: string;
 }
 
 export interface Litmas {

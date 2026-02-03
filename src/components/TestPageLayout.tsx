@@ -23,7 +23,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import path from 'path';
 
 // --- DEFINISI MENU SIDEBAR ---
 const menuItems = [
@@ -48,9 +47,11 @@ interface TestPageLayoutProps {
   permissionCode: string;
   icon: React.ReactNode;
   children?: React.ReactNode; 
+  // TAMBAHAN: Definisi prop action (opsional)
+  action?: React.ReactNode;
 }
 
-export function TestPageLayout({ title, description, permissionCode, icon, children }: TestPageLayoutProps) {
+export function TestPageLayout({ title, description, permissionCode, icon, children, action }: TestPageLayoutProps) {
   const { user, hasPermission, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -119,7 +120,6 @@ export function TestPageLayout({ title, description, permissionCode, icon, child
           </div>
         </div>
         
-        {/* MODIFIKASI: Tombol Logout dengan Konfirmasi */}
         <AlertDialog>
             <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-100">
@@ -178,17 +178,21 @@ export function TestPageLayout({ title, description, permissionCode, icon, child
           <Card className={cn("border-0 shadow-md overflow-hidden", !hasAccess ? "ring-2 ring-red-500/20" : "")}>
             <div className={cn("h-1.5 w-full", hasAccess ? "bg-primary" : "bg-red-500")}></div>
             <CardHeader className="bg-white">
-              <div className="flex items-center gap-4">
-                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", hasAccess ? "bg-primary/10 text-primary" : "bg-red-100 text-red-600")}>
-                  {hasAccess ? icon : <Lock className="w-6 h-6" />}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", hasAccess ? "bg-primary/10 text-primary" : "bg-red-100 text-red-600")}>
+                    {hasAccess ? icon : <Lock className="w-6 h-6" />}
+                    </div>
+                    <div>
+                    <CardTitle className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        {title}
+                        {!hasAccess && <Badge variant="destructive" className="ml-2 font-normal text-xs">Akses Ditolak</Badge>}
+                    </CardTitle>
+                    <CardDescription className="mt-1">{description}</CardDescription>
+                    </div>
                 </div>
-                <div>
-                  <CardTitle className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                    {title}
-                    {!hasAccess && <Badge variant="destructive" className="ml-2 font-normal text-xs">Akses Ditolak</Badge>}
-                  </CardTitle>
-                  <CardDescription className="mt-1">{description}</CardDescription>
-                </div>
+                {/* RENDER ACTION DI SINI */}
+                {action && <div className="shrink-0">{action}</div>}
               </div>
             </CardHeader>
           </Card>
@@ -200,13 +204,11 @@ export function TestPageLayout({ title, description, permissionCode, icon, child
               <AlertDescription>Anda memerlukan permission <code>{permissionCode}</code> untuk mengakses halaman ini.</AlertDescription>
             </Alert>
           ) : (
-            /* Render konten form/halaman di sini jika akses diterima */
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               {children}
             </div>
           )}
 
-          {/* Debug Info selalu ditampilkan di bawah */}
           <Card className="border-0 shadow-sm bg-white mt-8 opacity-75 hover:opacity-100 transition-opacity">
             <CardHeader className="pb-2 border-b border-slate-100">
               <CardTitle className="text-sm flex items-center gap-2 text-slate-500 uppercase tracking-wider font-bold">

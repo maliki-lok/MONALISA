@@ -4,61 +4,46 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { 
-  LogOut, 
-  User, 
-  Shield, 
-  Key, 
-  Settings,
-  FileText,
-  Briefcase,
-  BarChart3,
-  Mail,
-  Building2,
-  ClipboardList,
-  TrendingUp,
-  CheckCircle2,
-  Menu,
-  X,
-  Activity,
-  Loader2,
-  Users,
-  Info
+  LogOut, User, Shield, Settings, FileText, Briefcase, BarChart3, Mail, Building2, 
+  ClipboardList, TrendingUp, CheckCircle2, Menu, X, Activity, Loader2, Users, Info,
+  AlertTriangle, Clock, Calendar, UserCheck, Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
-  Label
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+  PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
-// IMPORT BARU: AlertDialog
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, 
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { permission } from 'process';
 
-// Definisi menu item
+// --- INTERFACES FOR TYPE SAFETY ---
+// Define the shape of data we expect from Supabase to fix TypeScript errors
+interface KlienData {
+  id_klien: number;
+  created_at: string;
+  kategori_usia: string | null;
+}
+
+interface LitmasData {
+  id_litmas: number;
+  jenis_litmas: string | null;
+  status: string | null;
+  tanggal_diterima_bapas: string | null;
+  created_at: string;
+  waktu_selesai: string | null;
+  nama_pk: string | null; // UUID string
+}
+
+// --- COLORS FOR CHARTS ---
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+// --- MENU DEFINITION ---
 const menuItems = [
   { path: '/admin', permission: 'access_admin', label: 'Admin Panel', icon: Settings },
   { path: '/test/kabapas', permission: 'access_kabapas', label: 'Kabapas', icon: Building2 },
@@ -75,86 +60,273 @@ const menuItems = [
   { path: '/about', permission:'access_admin', label: 'About', icon: Info},
 ];
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+// --- HELPER COMPONENT: STAT CARD ---
+const StatCard = ({ title, value, icon: Icon, description, colorClass = "text-slate-600", bgClass = "bg-slate-100" }: any) => (
+  <Card className="shadow-sm border-t-4 border-t-transparent hover:border-t-primary transition-all bg-white">
+    <CardContent className="pt-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <p className="text-sm text-muted-foreground font-medium">{title}</p>
+          <h3 className="text-2xl font-bold mt-1 text-slate-800">{value}</h3>
+          {description && <p className="text-xs text-slate-400 mt-1">{description}</p>}
+        </div>
+        <div className={`h-12 w-12 ${bgClass} rounded-full flex items-center justify-center`}>
+          <Icon className={`h-6 w-6 ${colorClass}`} />
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
 
+// --- ROLE-SPECIFIC COMPONENTS ---
+
+// 1. ADMIN STATS
+const AdminStats = ({ stats }: { stats: { totalUser: number, totalRoles: number, activeLog: number } }) => (
+  <div className="space-y-4 mb-8">
+    <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+      <Shield className="w-5 h-5 text-red-600"/> Panel Administrator
+    </h3>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <StatCard title="Total Pegawai" value={stats.totalUser} icon={Users} description="Data pegawai terdaftar" bgClass="bg-blue-100" colorClass="text-blue-600" />
+      <StatCard title="Role Akses" value={stats.totalRoles} icon={Key} description="Level otorisasi aktif" bgClass="bg-purple-100" colorClass="text-purple-600" />
+      <StatCard title="Aktivitas" value="-" icon={Activity} description="Log sistem (N/A)" bgClass="bg-orange-100" colorClass="text-orange-600" />
+      <StatCard title="Status Sistem" value="Online" icon={CheckCircle2} description="Koneksi DB Stabil" bgClass="bg-green-100" colorClass="text-green-600" />
+    </div>
+  </div>
+);
+
+// 2. KABAPAS STATS
+const KabapasStats = ({ stats, trendData, pieData }: any) => (
+  <div className="space-y-6 mb-8">
+    <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+      <Building2 className="w-5 h-5 text-primary"/> Eksekutif Dashboard
+    </h3>
+    
+    {/* Summary Cards */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard title="Total Permintaan" value={stats.total} icon={Briefcase} description="Semua data masuk" bgClass="bg-slate-100" colorClass="text-slate-600" />
+        <StatCard title="Sedang Berjalan" value={stats.onProgress} icon={Activity} description="Status proses/review" bgClass="bg-blue-100" colorClass="text-blue-600" />
+        <StatCard title="Revisi/Kendala" value={stats.revision} icon={AlertTriangle} description="Dikembalikan" bgClass="bg-red-100" colorClass="text-red-600" />
+        <StatCard title="Selesai" value={stats.completed} icon={CheckCircle2} description="Laporan Final" bgClass="bg-green-100" colorClass="text-green-600" />
+    </div>
+
+    {/* Charts Area */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Card className="border-0 shadow-md bg-white">
+        <CardHeader>
+          <CardTitle className="text-base font-medium text-slate-700">Tren Permintaan Litmas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Area type="monotone" dataKey="masuk" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} name="Surat Masuk" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-md bg-white">
+          <CardHeader>
+              <CardTitle className="text-base font-medium text-slate-700">Jenis Permintaan</CardTitle>
+          </CardHeader>
+          <CardContent>
+              <div className="h-[300px] w-full">
+                  {pieData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#8884d8" paddingAngle={5} dataKey="value">
+                                {pieData.map((entry: any, index: number) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{fontSize: '10px'}}/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                  ) : <div className="h-full flex items-center justify-center text-xs text-slate-400">Belum ada data</div>}
+              </div>
+          </CardContent>
+      </Card>
+    </div>
+  </div>
+);
+
+// 3. KASIE / KASUBSIE STATS
+const SupervisorStats = ({ stats }: { stats: { needReview: number, tppScheduled: number, completionRate: number } }) => (
+  <div className="space-y-4 mb-8">
+    <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+      <UserCheck className="w-5 h-5 text-indigo-600"/> Pengawasan & Verifikasi
+    </h3>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <StatCard title="Menunggu Verifikasi" value={stats.needReview} icon={FileText} description="Status: Review" bgClass="bg-yellow-100" colorClass="text-yellow-600" />
+      <StatCard title="Tingkat Penyelesaian" value={`${stats.completionRate}%`} icon={TrendingUp} description="Rata-rata global" bgClass="bg-indigo-100" colorClass="text-indigo-600" />
+      <StatCard title="Jadwal TPP" value={stats.tppScheduled} icon={Users} description="Status: TPP Scheduled" bgClass="bg-teal-100" colorClass="text-teal-600" />
+    </div>
+  </div>
+);
+
+// 4. PK STATS
+const PKStats = ({ userName, stats }: { userName: string, stats: { active: number, revision: number, doneMonth: number, nearDeadline: number } }) => (
+  <div className="space-y-4 mb-8">
+    <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+      <Briefcase className="w-5 h-5 text-blue-600"/> Tugas Saya ({userName})
+    </h3>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <StatCard title="Tugas Aktif" value={stats.active} icon={Activity} description="Perlu tindakan" bgClass="bg-blue-100" colorClass="text-blue-600" />
+      <StatCard title="Mendekati Deadline" value={stats.nearDeadline} icon={Clock} description="< 3 Hari (Estimasi)" bgClass="bg-orange-100" colorClass="text-orange-600" />
+      <StatCard title="Perlu Revisi" value={stats.revision} icon={FileText} description="Dikembalikan Kasie" bgClass="bg-red-100" colorClass="text-red-600" />
+      <StatCard title="Selesai Bulan Ini" value={stats.doneMonth} icon={CheckCircle2} description="Laporan disetujui" bgClass="bg-green-100" colorClass="text-green-600" />
+    </div>
+  </div>
+);
+
+// 5. OPERATOR STATS
+const OperatorStats = ({ stats }: { stats: { inputToday: number, incomplete: number, totalKlien: number } }) => (
+  <div className="space-y-4 mb-8">
+    <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+      <ClipboardList className="w-5 h-5 text-emerald-600"/> Statistik Registrasi
+    </h3>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <StatCard title="Input Hari Ini" value={stats.inputToday} icon={Calendar} description="Data klien baru" bgClass="bg-emerald-100" colorClass="text-emerald-600" />
+      <StatCard title="Status Baru" value={stats.incomplete} icon={AlertTriangle} description="Belum ditunjuk PK" bgClass="bg-yellow-100" colorClass="text-yellow-600" />
+      <StatCard title="Total Klien" value={stats.totalKlien} icon={Users} description="Database klien" bgClass="bg-slate-100" colorClass="text-slate-600" />
+    </div>
+  </div>
+);
+
+
+// --- MAIN DASHBOARD COMPONENT ---
 export default function Dashboard() {
-  const { user, signOut, hasPermission } = useAuth();
+  const { user, signOut, hasPermission, hasRole } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // --- STATE DATA ---
+  // --- STATE FOR REAL DATA ---
   const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Data Holder
+  const [globalStats, setGlobalStats] = useState({ total: 0, onProgress: 0, revision: 0, completed: 0 });
+  const [supervisorStats, setSupervisorStats] = useState({ needReview: 0, tppScheduled: 0, completionRate: 0 });
+  const [pkStats, setPkStats] = useState({ active: 0, revision: 0, doneMonth: 0, nearDeadline: 0 });
+  const [operatorStats, setOperatorStats] = useState({ inputToday: 0, incomplete: 0, totalKlien: 0 });
+  const [adminStats, setAdminStats] = useState({ totalUser: 0, totalRoles: 0, activeLog: 0 });
+  
+  // Chart Data
   const [statsKlien, setStatsKlien] = useState<any[]>([]);
   const [statsLitmasTrend, setStatsLitmasTrend] = useState<any[]>([]);
   const [statsLitmasJenis, setStatsLitmasJenis] = useState<any[]>([]);
 
-  // --- FETCH DATA REAL ---
+  // --- FETCH DATA LOGIC ---
   useEffect(() => {
-    const fetchDashboardStats = async () => {
+    const fetchRealData = async () => {
       setLoadingStats(true);
       try {
-        // 1. Fetch Data Klien (untuk Demografi)
-        const { data: rawKlien } = await supabase.from('klien').select('kategori_usia');
+        // 1. Fetch Employees (Untuk Admin)
+        // Note: Using 'any' cast here if type definition issues persist, otherwise standard fetch
+        const { count: employeeCount } = await supabase.from('employees').select('*', { count: 'exact', head: true });
+        setAdminStats(prev => ({ ...prev, totalUser: employeeCount || 0, totalRoles: 12 })); 
+
+        // 2. Fetch Klien (Untuk Operator & Charts)
+        // Explicitly cast result to KlienData[] to avoid Typescript errors on dynamic columns
+        const { data: rawKlienData } = await supabase.from('klien').select('id_klien, created_at, kategori_usia');
+        const rawKlien = (rawKlienData as unknown as KlienData[]) || [];
         
-        // Proses hitung Anak vs Dewasa
-        const klienCounts = (rawKlien || []).reduce((acc: any, curr) => {
+        // -- Logic Operator
+        const today = new Date().toISOString().split('T')[0];
+        const inputTodayCount = rawKlien.filter(k => k.created_at && k.created_at.startsWith(today)).length;
+        
+        setOperatorStats({
+            inputToday: inputTodayCount,
+            incomplete: 0, // Akan diupdate dari litmas
+            totalKlien: rawKlien.length
+        });
+
+        // -- Chart Kategori Klien
+        const klienCounts = rawKlien.reduce((acc: any, curr) => {
           const kat = curr.kategori_usia || 'Tidak Diketahui';
           acc[kat] = (acc[kat] || 0) + 1;
           return acc;
         }, {});
-        
-        const chartDataKlien = Object.keys(klienCounts).map(key => ({
-          name: key,
-          value: klienCounts[key]
-        }));
-        setStatsKlien(chartDataKlien);
+        setStatsKlien(Object.keys(klienCounts).map(key => ({ name: key, value: klienCounts[key] })));
 
-        // 2. Fetch Data Litmas (untuk Tren & Jenis)
-        const { data: rawLitmas } = await supabase
+        // 3. Fetch Litmas (Core Data)
+        // Explicitly cast result to LitmasData[]
+        const { data: rawLitmasData } = await supabase
           .from('litmas')
-          .select('tanggal_diterima_bapas, jenis_litmas');
+          .select('id_litmas, jenis_litmas, status, tanggal_diterima_bapas, created_at, waktu_selesai, nama_pk');
 
-        // Proses Tren Bulanan
+        const allLitmas = (rawLitmasData as unknown as LitmasData[]) || [];
+
+        // -- Logic Global (Kabapas)
+        const total = allLitmas.length;
+        const onProgress = allLitmas.filter(l => ['New Task', 'On Progress', 'Review'].includes(l.status || '')).length;
+        const revision = allLitmas.filter(l => l.status === 'Revision').length;
+        const completed = allLitmas.filter(l => ['Selesai', 'Approved'].includes(l.status || '')).length;
+        
+        setGlobalStats({ total, onProgress, revision, completed });
+
+        // -- Logic Supervisor (Kasie/Kasubsie)
+        const needReview = allLitmas.filter(l => l.status === 'Review').length;
+        const tppScheduled = allLitmas.filter(l => l.status === 'TPP Scheduled').length;
+        const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        setSupervisorStats({ needReview, tppScheduled, completionRate: rate });
+
+        // -- Logic Operator (Lanjutan)
+        const newTasks = allLitmas.filter(l => l.status === 'New Task').length;
+        setOperatorStats(prev => ({ ...prev, incomplete: newTasks }));
+
+        // -- Logic PK (Personal)
+        if (user && user.id) {
+            const myLitmas = allLitmas.filter(l => l.nama_pk === user.id); 
+            const myActive = myLitmas.filter(l => !['Selesai', 'Approved'].includes(l.status || '')).length;
+            const myRevision = myLitmas.filter(l => l.status === 'Revision').length;
+            
+            // Hitung selesai bulan ini
+            const currentMonth = new Date().getMonth();
+            const myDoneMonth = myLitmas.filter(l => {
+                if (!['Selesai', 'Approved'].includes(l.status || '') || !l.waktu_selesai) return false;
+                return new Date(l.waktu_selesai).getMonth() === currentMonth;
+            }).length;
+
+            setPkStats({ active: myActive, revision: myRevision, doneMonth: myDoneMonth, nearDeadline: 0 });
+        }
+
+        // -- Chart Tren Bulanan
         const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
         const trendMap = new Array(12).fill(0).map((_, i) => ({ name: months[i], masuk: 0 }));
-        
-        (rawLitmas || []).forEach((l) => {
-          if (l.tanggal_diterima_bapas) {
-            const monthIdx = new Date(l.tanggal_diterima_bapas).getMonth();
-            trendMap[monthIdx].masuk += 1;
+        allLitmas.forEach((l) => {
+          const dateRef = l.tanggal_diterima_bapas || l.created_at;
+          if (dateRef) {
+            const mIdx = new Date(dateRef).getMonth();
+            if (mIdx >= 0 && mIdx < 12) trendMap[mIdx].masuk += 1;
           }
         });
-        // Filter bulan yang ada datanya saja (opsional, atau tampilkan 6 bulan terakhir)
-        // Disini kita tampilkan setahun penuh atau yang memiliki nilai > 0 jika ingin ringkas
-        const currentMonth = new Date().getMonth();
-        const trendDataToShow = trendMap.slice(0, currentMonth + 1); // Tampilkan sampai bulan ini
-        setStatsLitmasTrend(trendDataToShow);
+        const currentMonthIdx = new Date().getMonth();
+        setStatsLitmasTrend(trendMap.slice(0, currentMonthIdx + 1));
 
-        // Proses Jenis Litmas
-        const jenisCounts = (rawLitmas || []).reduce((acc: any, curr) => {
+        // -- Chart Jenis Permintaan
+        const jenisCounts = allLitmas.reduce((acc: any, curr) => {
           const jenis = curr.jenis_litmas || 'Lainnya';
           acc[jenis] = (acc[jenis] || 0) + 1;
           return acc;
         }, {});
-
-        const chartDataJenis = Object.keys(jenisCounts).map(key => ({
-          name: key,
-          value: jenisCounts[key]
-        }));
-        setStatsLitmasJenis(chartDataJenis);
+        setStatsLitmasJenis(Object.keys(jenisCounts).map(key => ({ name: key, value: jenisCounts[key] })));
 
       } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
+        console.error("Error fetching dashboard data:", error);
       } finally {
         setLoadingStats(false);
       }
     };
 
-    fetchDashboardStats();
-  }, []);
+    fetchRealData();
+  }, [user]);
 
-  // UPDATE: Mengganti nama fungsi agar sesuai dengan snippet AlertDialog
   const handleConfirmSignOut = async () => {
     await signOut();
     navigate('/login');
@@ -163,8 +335,11 @@ export default function Dashboard() {
   const accessibleMenus = menuItems.filter(item => hasPermission(item.permission));
   // @ts-ignore
   const fotoUrl = user?.employee?.foto_url;
+  // @ts-ignore
+  const userName = user?.employee?.nama || 'User';
+  // @ts-ignore
+  const userJabatan = user?.employee?.jabatan || 'Staff';
 
-  // Komponen Sidebar Content
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white border-r">
       <div className="h-16 flex items-center px-6 border-b">
@@ -173,56 +348,29 @@ export default function Dashboard() {
         </div>
         <span className="text-lg font-bold text-slate-800">MONALISA</span>
       </div>
-
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">
-          Menu Aplikasi
-        </div>
-        {accessibleMenus.length > 0 ? (
-          accessibleMenus.map((item) => {
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Menu Aplikasi</div>
+        {accessibleMenus.length > 0 ? accessibleMenus.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             return (
-              <Button
-                key={item.path}
-                variant={isActive ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start mb-1",
-                  isActive ? "bg-slate-100 text-primary font-medium" : "text-slate-600 hover:text-primary hover:bg-slate-50"
-                )}
-                onClick={() => {
-                  navigate(item.path);
-                  setIsMobileMenuOpen(false);
-                }}
-              >
+              <Button key={item.path} variant={isActive ? "secondary" : "ghost"} className={cn("w-full justify-start mb-1", isActive ? "bg-slate-100 text-primary font-medium" : "text-slate-600 hover:text-primary hover:bg-slate-50")} onClick={() => { navigate(item.path); setIsMobileMenuOpen(false); }}>
                 <Icon className={cn("w-5 h-5 mr-3", isActive ? "text-primary" : "text-slate-500")} />
                 {item.label}
               </Button>
             );
-          })
-        ) : (
-          <div className="px-3 py-4 text-sm text-slate-500 text-center bg-slate-50 rounded-lg mx-2 border border-dashed">
-            Tidak ada akses menu
-          </div>
-        )}
+        }) : <div className="px-3 py-4 text-sm text-slate-500 text-center bg-slate-50 rounded-lg mx-2 border border-dashed">Tidak ada akses menu</div>}
       </div>
-
       <div className="p-4 border-t bg-slate-50/50">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
-             {fotoUrl ? (
-                <img src={fotoUrl} alt="User" className="w-full h-full object-cover" />
-             ) : (
-                <User className="w-6 h-6 m-2 text-slate-400" />
-             )}
+             {fotoUrl ? <img src={fotoUrl} alt="User" className="w-full h-full object-cover" /> : <User className="w-6 h-6 m-2 text-slate-400" />}
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-medium text-slate-900 truncate">{user?.employee.nama}</p>
-            <p className="text-xs text-slate-500 truncate">{user?.employee.jabatan || 'User'}</p>
+            <p className="text-sm font-medium text-slate-900 truncate">{userName}</p>
+            <p className="text-xs text-slate-500 truncate">{userJabatan}</p>
           </div>
         </div>
-
-        {/* UPDATE: Menggunakan AlertDialog untuk konfirmasi keluar */}
         <AlertDialog>
             <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-100">
@@ -232,19 +380,14 @@ export default function Dashboard() {
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Konfirmasi Keluar</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Apakah Anda yakin ingin keluar dari aplikasi? Sesi Anda akan diakhiri.
-                    </AlertDialogDescription>
+                    <AlertDialogDescription>Apakah Anda yakin ingin keluar dari aplikasi?</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Batal</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirmSignOut} className="bg-red-600 hover:bg-red-700 text-white">
-                        Ya, Keluar
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleConfirmSignOut} className="bg-red-600 hover:bg-red-700 text-white">Ya, Keluar</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-
       </div>
     </div>
   );
@@ -252,97 +395,34 @@ export default function Dashboard() {
   return (
     <div className="flex min-h-screen bg-slate-50/50">
       <WhatsNewDialog />
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:block w-64 fixed inset-y-0 z-30">
-        <SidebarContent />
-      </aside>
-
-      {/* Mobile Menu Overlay */}
+      <aside className="hidden md:block w-64 fixed inset-y-0 z-30"><SidebarContent /></aside>
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="fixed inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)} />
           <div className="fixed inset-y-0 left-0 w-3/4 max-w-sm bg-white animate-in slide-in-from-left duration-300">
              <div className="relative h-full">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="absolute right-4 top-4 z-50" 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <X className="w-5 h-5" />
-                </Button>
+                <Button variant="ghost" size="icon" className="absolute right-4 top-4 z-50" onClick={() => setIsMobileMenuOpen(false)}><X className="w-5 h-5" /></Button>
                 <SidebarContent />
              </div>
           </div>
         </div>
       )}
 
-      {/* Main Content Area */}
       <main className="flex-1 md:pl-64 flex flex-col min-h-screen">
-        
-        {/* Mobile Header */}
         <header className="md:hidden bg-white border-b h-16 flex items-center justify-between px-4 sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-             <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(true)}>
-               <Menu className="w-5 h-5" />
-             </Button>
-             <span className="font-semibold text-lg">MONALISA</span>
-          </div>
+          <div className="flex items-center gap-3"><Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(true)}><Menu className="w-5 h-5" /></Button><span className="font-semibold text-lg">MONALISA</span></div>
         </header>
 
-        {/* Page Content */}
         <div className="p-4 sm:p-8 space-y-8 max-w-5xl mx-auto w-full">
-          
-          {/* Welcome Message */}
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-slate-500">Selamat datang kembali di sistem manajemen.</p>
+            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Dashboard</h1>
+            <p className="text-slate-500 mt-1">Selamat datang kembali, <span className="font-semibold text-primary">{userName}</span>!</p>
           </div>
 
-          {/* User Profile Card - Simplified */}
-          <Card className="mb-8 border-0 shadow-sm bg-white">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-                {/* Avatar */}
-                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 overflow-hidden shrink-0">
-                   {fotoUrl ? (
-                      <img src={fotoUrl} alt={user?.employee.nama} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    ) : (
-                      <User className="w-10 h-10 text-slate-400" />
-                    )}
-                </div>
+          <Separator />
 
-                {/* User Details */}
-                <div className="flex-1 text-center md:text-left space-y-2">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">{user?.employee.nama}</h2>
-                    <p className="text-slate-500 text-sm flex items-center justify-center md:justify-start gap-2">
-                      <Briefcase className="w-3 h-3" />
-                      {user?.employee.jabatan || 'Staff'} - {user?.employee.unit_kerja || 'Unit Kerja'}
-                    </p>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                     <Badge variant="outline" className="font-mono text-xs text-slate-500 bg-slate-50">
-                        NIP: {user?.employee.nip}
-                     </Badge>
-                     {user?.roles.map((role) => (
-                        <Badge key={role} className="bg-primary/10 text-primary hover:bg-primary/20 border-0">
-                          {role}
-                        </Badge>
-                     ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* --- INFOGRAPHICS SECTION --- */}
-          <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800">
-              <Activity className="w-5 h-5 text-primary" />
-              Infografis Data Realtime
-            </h2>
+          {/* === DYNAMIC INFOGRAPHICS SECTION BASED ON ROLE === */}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             {loadingStats ? (
                <div className="flex items-center justify-center h-48 bg-white/50 rounded-xl border border-dashed border-slate-300">
@@ -352,79 +432,50 @@ export default function Dashboard() {
                   </div>
                </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Chart 1: Tren Litmas */}
-                <Card className="border-0 shadow-md bg-white">
-                  <CardHeader>
-                    <CardTitle className="text-base font-medium text-slate-700">Tren Permintaan Litmas (Tahun Ini)</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={statsLitmasTrend}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                          <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                          <Area type="monotone" dataKey="masuk" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} name="Surat Masuk" strokeWidth={2} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
+                <>
+                    {/* 1. ADMIN VIEW */}
+                    {hasRole('admin') && <AdminStats stats={adminStats} />}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {/* Chart 2: Jenis Litmas */}
-                    <Card className="border-0 shadow-md bg-white">
-                        <CardHeader>
-                            <CardTitle className="text-base font-medium text-slate-700">Jenis Permintaan</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="h-[200px] w-full">
-                                {statsLitmasJenis.length > 0 ? (
-                                  <ResponsiveContainer width="100%" height="100%">
-                                      <PieChart>
-                                          <Pie data={statsLitmasJenis} cx="50%" cy="50%" innerRadius={50} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value">
-                                              {statsLitmasJenis.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
-                                          </Pie>
-                                          <Tooltip />
-                                          <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{fontSize: '10px'}}/>
-                                      </PieChart>
-                                  </ResponsiveContainer>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-xs text-slate-400">Belum ada data</div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                    {/* 2. KABAPAS VIEW (Global Stats) */}
+                    {hasRole('kabapas') && (
+                        <KabapasStats stats={globalStats} trendData={statsLitmasTrend} pieData={statsLitmasJenis} />
+                    )}
 
-                    {/* Chart 3: Demografi Klien */}
-                    <Card className="border-0 shadow-md bg-white">
-                        <CardHeader>
-                            <CardTitle className="text-base font-medium text-slate-700">Kategori Klien</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="h-[200px] w-full">
-                                {statsKlien.length > 0 ? (
-                                  <ResponsiveContainer width="100%" height="100%">
-                                      <BarChart data={statsKlien}>
-                                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                                          <Tooltip cursor={{fill: 'transparent'}} />
-                                          <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Jumlah" barSize={40} />
-                                      </BarChart>
-                                  </ResponsiveContainer>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-xs text-slate-400">Belum ada data</div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-              </div>
+                    {/* 3. KASIE / KASUBSIE VIEW */}
+                    {(hasRole('kasie') || hasRole('kasubsie')) && <SupervisorStats stats={supervisorStats} />}
+
+                    {/* 4. PK VIEW (Personalized) */}
+                    {hasRole('pk') && <PKStats userName={userName} stats={pkStats} />}
+
+                    {/* 5. OPERATOR VIEW */}
+                    {(hasRole('op_reg_anak') || hasRole('op_reg_dewasa')) && <OperatorStats stats={operatorStats} />}
+                </>
             )}
+          </div>
+
+          {/* Shared Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             <Card className="border-none shadow-md bg-gradient-to-br from-slate-900 to-slate-800 text-white overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                <CardHeader><CardTitle>Berita & Pengumuman</CardTitle><CardDescription className="text-slate-300">Update terbaru dari internal Bapas</CardDescription></CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <div className="flex items-start gap-3 bg-white/10 p-3 rounded-lg border border-white/10">
+                            <div className="bg-blue-500/20 p-2 rounded text-blue-300"><FileText className="w-4 h-4"/></div>
+                            <div><h4 className="font-semibold text-sm">Update Sistem MONALISA v2.0</h4><p className="text-xs text-slate-400 mt-1">Pembaruan fitur tanda tangan elektronik.</p></div>
+                        </div>
+                    </div>
+                </CardContent>
+             </Card>
+             <Card>
+                <CardHeader><CardTitle>Kalender Kegiatan</CardTitle><CardDescription>Jadwal agenda minggu ini</CardDescription></CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2"><div className="flex items-center gap-3"><span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded w-16 text-center">Senin</span><span className="text-sm text-slate-700">Apel Pagi</span></div><span className="text-xs text-slate-400">07:30 WIB</span></div>
+                        <div className="flex justify-between items-center border-b pb-2"><div className="flex items-center gap-3"><span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded w-16 text-center">Rabu</span><span className="text-sm text-slate-700">Sidang TPP</span></div><span className="text-xs text-slate-400">09:00 WIB</span></div>
+                    </div>
+                </CardContent>
+             </Card>
           </div>
 
         </div>

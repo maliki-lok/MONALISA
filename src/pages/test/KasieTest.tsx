@@ -6,15 +6,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
-  Search, CheckCircle, Clock, Users, 
-  Eye, FileCheck, Loader2, 
-  BarChart3, AlertTriangle, Shield, FileText, ExternalLink, History
+  Search, CheckCircle, Clock, 
+  Eye, FileText, Loader2, 
+  Shield, ExternalLink, History, Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -57,13 +58,16 @@ export default function KasieDashboard() {
   const [litmasList, setLitmasList] = useState<LitmasData[]>([]);
   const [officerStats, setOfficerStats] = useState<OfficerStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   
-  // State View Detail
+  // State Pencarian
+  const [searchTerm, setSearchTerm] = useState(''); // Untuk Daftar Pengawasan
+  const [pkSearchTerm, setPkSearchTerm] = useState(''); // State Baru: Untuk Monitoring Kinerja
+  
+  // State View Detail Pengawasan (Litmas)
   const [selectedItem, setSelectedItem] = useState<LitmasData | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // State View Kinerja Detail
+  // State View Kinerja Detail (Petugas)
   const [selectedOfficer, setSelectedOfficer] = useState<OfficerStats | null>(null);
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
 
@@ -143,11 +147,23 @@ export default function KasieDashboard() {
     });
   };
 
+  // Filter Litmas
   const filteredLitmas = litmasList.filter(item => 
     item.klien?.nama_klien.toLowerCase().includes(searchTerm.toLowerCase()) || 
     item.petugas?.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.nomor_surat_permintaan.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Filter Officer Stats (Search Logic Baru)
+  const filteredOfficerStats = officerStats.filter(pk => 
+    pk.nama.toLowerCase().includes(pkSearchTerm.toLowerCase()) ||
+    pk.nip.includes(pkSearchTerm)
+  );
+
+  // Filter Tugas Milik Petugas yang Dipilih
+  const selectedOfficerTasks = selectedOfficer 
+    ? litmasList.filter(item => item.petugas?.id === selectedOfficer.id)
+    : [];
 
   return (
     <TestPageLayout 
@@ -258,12 +274,35 @@ export default function KasieDashboard() {
 
           {/* TAB 2: MONITORING KINERJA */}
           <TabsContent value="monitoring">
-              {officerStats.length === 0 ? (
-                  <Card><CardContent className="text-center py-12 text-muted-foreground">Belum ada data petugas.</CardContent></Card>
+              <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                 <div>
+                    <h3 className="text-lg font-bold text-slate-700">Monitor Kinerja Anggota</h3>
+                    <p className="text-sm text-muted-foreground">Statistik beban kerja dan penyelesaian tugas per Petugas PK.</p>
+                 </div>
+                 <div className="relative w-full md:w-72">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Cari nama PK atau NIP..." 
+                      className="pl-8 bg-white" 
+                      value={pkSearchTerm} 
+                      onChange={(e) => setPkSearchTerm(e.target.value)} 
+                    />
+                 </div>
+              </div>
+
+              {filteredOfficerStats.length === 0 ? (
+                  <Card><CardContent className="text-center py-12 text-muted-foreground">Data petugas tidak ditemukan.</CardContent></Card>
               ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {officerStats.map((pk) => (
-                          <Card key={pk.id} className="hover:shadow-md transition-shadow">
+                      {filteredOfficerStats.map((pk) => (
+                          <Card 
+                            key={pk.id} 
+                            className="hover:shadow-md transition-all cursor-pointer active:scale-95 border-t-2 border-t-transparent hover:border-t-primary"
+                            onClick={() => {
+                                setSelectedOfficer(pk);
+                                setIsPerformanceOpen(true);
+                            }}
+                          >
                               <CardHeader className="pb-3 flex flex-row items-center gap-4">
                                   <Avatar className="h-12 w-12 border">
                                       <AvatarFallback className="bg-primary/5 text-primary font-bold">{pk.nama.substring(0, 2).toUpperCase()}</AvatarFallback>
@@ -292,7 +331,90 @@ export default function KasieDashboard() {
           </TabsContent>
         </Tabs>
 
-        {/* MODAL DETAIL (VIEW ONLY) */}
+        {/* --- MODAL DETAIL PETUGAS PK --- */}
+        <Dialog open={isPerformanceOpen} onOpenChange={setIsPerformanceOpen}>
+            <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 overflow-hidden">
+                <DialogHeader className="p-6 pb-2 shrink-0 border-b bg-slate-50/80">
+                    <div className="flex items-center gap-4">
+                        <Avatar className="h-16 w-16 border-2 border-white shadow-sm">
+                            <AvatarFallback className="text-lg font-bold bg-primary text-white">
+                                {selectedOfficer?.nama.substring(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <DialogTitle className="text-xl font-bold text-slate-800">{selectedOfficer?.nama}</DialogTitle>
+                            <DialogDescription className="font-mono text-slate-500 flex items-center gap-2 mt-1">
+                                <span className="bg-slate-200 px-2 py-0.5 rounded text-xs text-slate-700">NIP: {selectedOfficer?.nip}</span>
+                            </DialogDescription>
+                        </div>
+                    </div>
+                    {/* Statistik Mini di Header */}
+                    <div className="grid grid-cols-4 gap-4 mt-6">
+                        <div className="bg-white p-3 rounded-lg border shadow-sm text-center">
+                            <span className="text-xs text-slate-500 font-medium uppercase block mb-1">Total Assigned</span>
+                            <span className="text-2xl font-bold text-slate-800">{selectedOfficer?.total_assigned}</span>
+                        </div>
+                        <div className="bg-green-50 p-3 rounded-lg border border-green-100 text-center">
+                            <span className="text-xs text-green-600 font-medium uppercase block mb-1">Selesai</span>
+                            <span className="text-2xl font-bold text-green-700">{selectedOfficer?.completed}</span>
+                        </div>
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center">
+                            <span className="text-xs text-blue-600 font-medium uppercase block mb-1">Berjalan</span>
+                            <span className="text-2xl font-bold text-blue-700">{selectedOfficer?.in_progress}</span>
+                        </div>
+                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 text-center">
+                            <span className="text-xs text-orange-600 font-medium uppercase block mb-1">Revisi</span>
+                            <span className="text-2xl font-bold text-orange-700">{selectedOfficer?.revision}</span>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <ScrollArea className="flex-1 p-6 bg-slate-50/30">
+                    <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-primary"/> Daftar Tugas Litmas
+                    </h4>
+                    {selectedOfficerTasks.length > 0 ? (
+                        <div className="space-y-3">
+                            {selectedOfficerTasks.map((task) => (
+                                <div key={task.id_litmas} className="bg-white p-4 rounded-lg border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-primary/50 transition-colors">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 rounded">{task.nomor_surat_permintaan}</span>
+                                        </div>
+                                        <h5 className="font-bold text-slate-800 text-sm">{task.klien?.nama_klien}</h5>
+                                        <p className="text-xs text-slate-500 mt-0.5">{task.jenis_litmas} • {task.asal_bapas}</p>
+                                    </div>
+                                    <div className="flex items-center gap-4 self-end md:self-center">
+                                        <div className="text-right">
+                                            <Badge className={
+                                                task.status === 'Approved' || task.status === 'Selesai' ? 'bg-green-100 text-green-700 hover:bg-green-100 border-green-200' :
+                                                task.status === 'On Progress' ? 'bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200' :
+                                                'bg-slate-100 text-slate-700 hover:bg-slate-100 border-slate-200'
+                                            }>
+                                                {task.status}
+                                            </Badge>
+                                            <p className="text-[10px] text-slate-400 mt-1">
+                                                Update: {formatDateTime(task.waktu_selesai || task.waktu_registrasi)}
+                                            </p>
+                                        </div>
+                                        <Button size="icon" variant="ghost" onClick={() => { setSelectedItem(task); setIsDetailOpen(true); }}>
+                                            <Eye className="w-4 h-4 text-slate-500"/>
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-10 text-slate-400 border-2 border-dashed rounded-xl">
+                            <Briefcase className="w-10 h-10 mx-auto mb-2 opacity-50"/>
+                            <p>Belum ada tugas yang diberikan.</p>
+                        </div>
+                    )}
+                </ScrollArea>
+            </DialogContent>
+        </Dialog>
+
+        {/* MODAL DETAIL LITMAS (VIEW ONLY) - EXISTING */}
         <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
           <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
               <DialogHeader>
@@ -328,7 +450,7 @@ export default function KasieDashboard() {
                       </div>
                   </div>
 
-                  {/* BAGIAN BARU: TIMELINE HISTORY */}
+                  {/* TIMELINE HISTORY */}
                   <div className="border rounded-md p-4 bg-slate-50">
                       <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
                           <History className="w-4 h-4 text-blue-600"/> Riwayat Proses
