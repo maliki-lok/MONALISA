@@ -557,12 +557,57 @@ export default function OperatorRegistrasiTest() {
                   toast({ title: "Selesai", description: "Registrasi Litmas Berhasil." });
               }
 
-              if (selectedPkId) {
-                  const selectedKlienData = listKlien.find(k => k.id_klien === selectedClientId);
-                  supabase.functions.invoke('send-new-task-notification', {
-                      body: { pk_id: selectedPkId, nama_klien: selectedKlienData?.nama_klien || 'Tanpa Nama', jenis_litmas: dataLitmas.jenis_litmas, nomor_surat: dataLitmas.nomor_surat_permintaan }
-                  });
-              }
+              // Trigger WA
+            if (selectedPkId) {
+                // 1. Ambil Data Klien (dari state listKlien atau editingKlien)
+                const klienData = listKlien.find(k => k.id_klien === selectedClientId) || editingKlien;
+                
+                // 2. Ambil Data Penjamin (dari state editingPenjamin)
+                // Note: Pastikan user sudah mengisi/load tab Penjamin, jika tidak data akan kosong ('-')
+                const penjaminData = editingPenjamin || {};
+
+                // 3. Ambil Data Perkara (dari state perkaraList[0] karena array)
+                const perkaraData = perkaraList.length > 0 ? perkaraList[0] : {};
+
+                // 4. Susun Payload
+                const waPayload = {
+                    pk_id: selectedPkId,
+                    
+                    // Data Litmas
+                    nomor_register_litmas: dataLitmas.nomor_register_litmas,
+                    jenis_litmas: dataLitmas.jenis_litmas,
+                    asal_surat: dataLitmas.asal_bapas, // Menggunakan Asal Bapas/UPT
+                    
+                    // Data Klien
+                    nama_klien: klienData?.nama_klien || 'Tanpa Nama',
+                    jenis_kelamin: klienData?.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
+                    agama: klienData?.agama || '-',
+                    
+                    // Data Penjamin
+                    nama_penjamin: penjaminData.nama_penjamin || '-',
+                    alamat_penjamin: penjaminData.alamat || '-',
+                    telepon_penjamin: penjaminData.nomor_telepon || '-',
+                    pekerjaan_penjamin: penjaminData.pekerjaan || '-',
+                    hubungan_penjamin: penjaminData.hubungan_klien ? penjaminData.hubungan_klien.replace('_', ' ').toUpperCase() : '-',
+                    
+                    // Data Perkara
+                    perkara: perkaraData.tindak_pidana || '-',
+                    pidana: perkaraData.vonis_pidana || '-', // Mengirim string durasi vonis
+                    tanggal_2_3: perkaraData.tanggal_ekspirasi || '-', // Menggunakan tgl ekspirasi sebagai referensi tgl 2/3 (sesuaikan jika ada field khusus)
+                    
+                    // Link (Bisa dihardcode di edge function atau kirim dari sini)
+                    link_surat_perintah: "https://docs.google.com/document/d/1WHiCF_gwpj5En-l4U_L5MLAuyxGNky8bIsdKF9_3HC0/edit?usp=drivesdk",
+                    link_srikandi: "https://srikandi.arsip.go.id/"
+                };
+
+                // Kirim ke Edge Function
+                supabase.functions.invoke('send-new-task-notification', {
+                    body: waPayload
+                }).then(({ data, error }) => {
+                    if (error) console.error("Gagal kirim WA:", error);
+                    else console.log("WA Terkirim:", data);
+                });
+            }
 
               sessionStorage.removeItem('temp_perkara_list');
               handleCancelButton(); 
