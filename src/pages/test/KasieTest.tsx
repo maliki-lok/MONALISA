@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { TestPageLayout } from '@/components/TestPageLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Interfaces Updated
+// Interfaces
 interface LitmasData {
   id_litmas: number;
   nomor_surat_permintaan: string;
@@ -30,7 +31,7 @@ interface LitmasData {
   anev_notes: string | null; 
   surat_tugas_signed_url: string | null;
   hasil_litmas_url: string | null;
-  klien?: { nama_klien: string; nomor_register_lapas: string; } | null;
+  klien?: { nama_klien: string; nomor_register_lapas: string; kategori_usia: string; } | null;
   petugas?: { id: string; nama: string; nip: string; } | null;
   
   // Timeline Fields
@@ -55,19 +56,28 @@ interface OfficerStats {
 }
 
 export default function KasieDashboard() {
+  const { hasRole } = useAuth(); 
+
+  // --- PERBAIKAN 1: Update Nama Role Sesuai Database ---
+  // Kita cek kedua kemungkinan penulisan agar lebih aman
+  const isKasieAnak = hasRole('kasi_bk_anak') || hasRole('kasie_anak');
+  const isKasieDewasa = hasRole('kasi_bk_dewasa') || hasRole('kasie_dewasa');
+  const isAdmin = hasRole('admin');
+
+  // Judul Halaman Dinamis
+  const dashboardTitle = isKasieAnak ? "Dashboard Kasi BK Anak" : (isKasieDewasa ? "Dashboard Kasi BK Dewasa" : "Dashboard Kepala Seksi");
+
   const [litmasList, setLitmasList] = useState<LitmasData[]>([]);
   const [officerStats, setOfficerStats] = useState<OfficerStats[]>([]);
   const [loading, setLoading] = useState(true);
   
   // State Pencarian
-  const [searchTerm, setSearchTerm] = useState(''); // Untuk Daftar Pengawasan
-  const [pkSearchTerm, setPkSearchTerm] = useState(''); // State Baru: Untuk Monitoring Kinerja
+  const [searchTerm, setSearchTerm] = useState('');
+  const [pkSearchTerm, setPkSearchTerm] = useState('');
   
-  // State View Detail Pengawasan (Litmas)
+  // State View Detail
   const [selectedItem, setSelectedItem] = useState<LitmasData | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // State View Kinerja Detail (Petugas)
   const [selectedOfficer, setSelectedOfficer] = useState<OfficerStats | null>(null);
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
 
@@ -82,7 +92,7 @@ export default function KasieDashboard() {
         .select(`
           *,
           petugas:petugas_pk!litmas_nama_pk_fkey (id, nama, nip),
-          klien:klien!litmas_id_klien_fkey (nama_klien, nomor_register_lapas)
+          klien:klien!litmas_id_klien_fkey (nama_klien, nomor_register_lapas, kategori_usia)
         `)
         .order('created_at', { ascending: false });
 
@@ -91,10 +101,26 @@ export default function KasieDashboard() {
       // 2. Ambil Data Petugas
       const { data: petugasData } = await supabase.from('petugas_pk').select('id, nama, nip');
 
-      // 3. Olah Data Statistik
-      const allLitmas = (litmasData as unknown as LitmasData[]) || [];
+      // --- PERBAIKAN 2: Logika Filter yang Lebih Ketat ---
+      let allLitmas = (litmasData as unknown as LitmasData[]) || [];
+
+      if (!isAdmin) {
+        if (isKasieAnak) {
+            // Jika Kasi Anak, HANYA tampilkan Anak
+            allLitmas = allLitmas.filter(item => item.klien?.kategori_usia === 'Anak');
+        } else if (isKasieDewasa) {
+            // Jika Kasi Dewasa, HANYA tampilkan Dewasa
+            allLitmas = allLitmas.filter(item => item.klien?.kategori_usia === 'Dewasa');
+        } else {
+            // SECURITY FALLBACK: Jika bukan Admin dan role tidak dikenali, kosongkan data.
+            // Ini mencegah kebocoran data jika ada typo pada role.
+            allLitmas = [];
+        }
+      }
+
       setLitmasList(allLitmas);
 
+      // 3. Olah Data Statistik (Berdasarkan data yang SUDAH difilter di atas)
       const statsMap = new Map<string, OfficerStats>();
       petugasData?.forEach((p: any) => {
           statsMap.set(p.id, {
@@ -131,7 +157,7 @@ export default function KasieDashboard() {
     fetchData();
     const channel = supabase.channel('kasie-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'litmas' }, fetchData).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDoc = (path: string | null) => {
     if(!path) return;
@@ -147,27 +173,24 @@ export default function KasieDashboard() {
     });
   };
 
-  // Filter Litmas
   const filteredLitmas = litmasList.filter(item => 
     item.klien?.nama_klien.toLowerCase().includes(searchTerm.toLowerCase()) || 
     item.petugas?.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.nomor_surat_permintaan.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter Officer Stats (Search Logic Baru)
   const filteredOfficerStats = officerStats.filter(pk => 
     pk.nama.toLowerCase().includes(pkSearchTerm.toLowerCase()) ||
     pk.nip.includes(pkSearchTerm)
   );
 
-  // Filter Tugas Milik Petugas yang Dipilih
   const selectedOfficerTasks = selectedOfficer 
     ? litmasList.filter(item => item.petugas?.id === selectedOfficer.id)
     : [];
 
   return (
     <TestPageLayout 
-      title="Dashboard Kepala Seksi"
+      title={dashboardTitle}
       description="Monitoring Kinerja PK dan Pengawasan Proses Litmas"
       permissionCode="access_kasie"
       icon={<Shield className="w-6 h-6" />}
@@ -241,31 +264,39 @@ export default function KasieDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredLitmas.map((item) => (
-                        <TableRow key={item.id_litmas}>
-                          <TableCell>
-                            <div className="font-medium">{item.klien?.nama_klien}</div>
-                            <div className="text-xs text-muted-foreground">{item.nomor_surat_permintaan}</div>
-                          </TableCell>
-                          <TableCell>{item.jenis_litmas}</TableCell>
-                          <TableCell>{item.petugas?.nama}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={
-                                item.status === 'New Task' ? 'text-slate-500 border-slate-300' :
-                                item.status === 'On Progress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                item.status === 'Review' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                'bg-green-50 text-green-700 border-green-200'
-                            }>
-                              {item.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button size="sm" variant="ghost" onClick={() => { setSelectedItem(item); setIsDetailOpen(true); }}>
-                              <Eye className="mr-2 h-4 w-4" /> Lihat
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {filteredLitmas.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Tidak ada data ditemukan.</TableCell></TableRow>
+                      ) : (
+                        filteredLitmas.map((item) => (
+                          <TableRow key={item.id_litmas}>
+                            <TableCell>
+                              <div className="font-medium">{item.klien?.nama_klien}</div>
+                              <div className="text-xs text-muted-foreground">{item.nomor_surat_permintaan}</div>
+                              {/* Menampilkan badge kategori usia */}
+                              <Badge variant="outline" className={`text-[10px] mt-1 ${item.klien?.kategori_usia === 'Anak' ? 'border-amber-500 text-amber-600 bg-amber-50' : 'border-blue-500 text-blue-600 bg-blue-50'}`}>
+                                {item.klien?.kategori_usia}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{item.jenis_litmas}</TableCell>
+                            <TableCell>{item.petugas?.nama}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={
+                                  item.status === 'New Task' ? 'text-slate-500 border-slate-300' :
+                                  item.status === 'On Progress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  item.status === 'Review' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                  'bg-green-50 text-green-700 border-green-200'
+                              }>
+                                {item.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button size="sm" variant="ghost" onClick={() => { setSelectedItem(item); setIsDetailOpen(true); }}>
+                                <Eye className="mr-2 h-4 w-4" /> Lihat
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
               </CardContent>
@@ -380,6 +411,9 @@ export default function KasieDashboard() {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 rounded">{task.nomor_surat_permintaan}</span>
+                                            <Badge variant="outline" className={`text-[10px] ${task.klien?.kategori_usia === 'Anak' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
+                                                {task.klien?.kategori_usia}
+                                            </Badge>
                                         </div>
                                         <h5 className="font-bold text-slate-800 text-sm">{task.klien?.nama_klien}</h5>
                                         <p className="text-xs text-slate-500 mt-0.5">{task.jenis_litmas} • {task.asal_bapas}</p>
@@ -414,7 +448,7 @@ export default function KasieDashboard() {
             </DialogContent>
         </Dialog>
 
-        {/* MODAL DETAIL LITMAS (VIEW ONLY) - EXISTING */}
+        {/* MODAL DETAIL LITMAS (VIEW ONLY) */}
         <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
           <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
               <DialogHeader>
@@ -427,6 +461,7 @@ export default function KasieDashboard() {
               <div className="space-y-4 py-2">
                   <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-md">
                       <div><span className="text-muted-foreground block text-xs uppercase mb-1">Nama Klien</span> <p className="font-medium">{selectedItem?.klien?.nama_klien}</p></div>
+                      <div><span className="text-muted-foreground block text-xs uppercase mb-1">Kategori Usia</span> <p className="font-medium">{selectedItem?.klien?.kategori_usia}</p></div>
                       <div><span className="text-muted-foreground block text-xs uppercase mb-1">Jenis Litmas</span> <p className="font-medium">{selectedItem?.jenis_litmas}</p></div>
                       <div><span className="text-muted-foreground block text-xs uppercase mb-1">Asal Bapas</span> <p className="font-medium">{selectedItem?.asal_bapas}</p></div>
                       <div><span className="text-muted-foreground block text-xs uppercase mb-1">PK Penanggungjawab</span> <p className="font-medium">{selectedItem?.petugas?.nama}</p></div>
@@ -457,47 +492,22 @@ export default function KasieDashboard() {
                       </h4>
                       <div className="relative border-l-2 border-slate-200 ml-2 space-y-6">
                           
-                          {/* 1. Registrasi */}
-                          <div className="ml-6 relative">
-                              <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${selectedItem?.waktu_registrasi ? 'bg-green-500 border-green-500' : 'bg-slate-200 border-slate-300'}`}></div>
-                              <p className="text-xs font-semibold">Registrasi & Penunjukan PK</p>
-                              <p className="text-[10px] text-slate-500">{formatDateTime(selectedItem?.waktu_registrasi)}</p>
-                          </div>
+                          {/* Timeline items similar to above */}
+                          {[
+                            { label: "Registrasi & Penunjukan PK", time: selectedItem?.waktu_registrasi, color: "bg-green-500", border: "border-green-500" },
+                            { label: "Upload Surat Tugas (PK)", time: selectedItem?.waktu_upload_surat_tugas, color: "bg-green-500", border: "border-green-500" },
+                            { label: "Upload Laporan Litmas (PK)", time: selectedItem?.waktu_upload_laporan, color: "bg-green-500", border: "border-green-500" },
+                            { label: "Verifikasi & Approval (Anev)", time: selectedItem?.waktu_verifikasi_anev, color: "bg-green-500", border: "border-green-500" },
+                            { label: "Pelaksanaan Sidang TPP", time: selectedItem?.waktu_sidang_tpp, color: "bg-green-500", border: "border-green-500" },
+                            { label: "Selesai", time: selectedItem?.waktu_selesai, color: "bg-blue-600", border: "border-blue-600", text: "text-blue-700" }
+                          ].map((step, idx) => (
+                              <div key={idx} className="ml-6 relative">
+                                  <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${step.time ? step.color + ' ' + step.border : 'bg-slate-200 border-slate-300'}`}></div>
+                                  <p className={`text-xs font-semibold ${step.text || ''}`}>{step.label}</p>
+                                  <p className="text-[10px] text-slate-500">{formatDateTime(step.time)}</p>
+                              </div>
+                          ))}
 
-                          {/* 2. Upload Surat Tugas */}
-                          <div className="ml-6 relative">
-                              <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${selectedItem?.waktu_upload_surat_tugas ? 'bg-green-500 border-green-500' : 'bg-slate-200 border-slate-300'}`}></div>
-                              <p className="text-xs font-semibold">Upload Surat Tugas (PK)</p>
-                              <p className="text-[10px] text-slate-500">{formatDateTime(selectedItem?.waktu_upload_surat_tugas)}</p>
-                          </div>
-
-                          {/* 3. Upload Laporan */}
-                          <div className="ml-6 relative">
-                              <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${selectedItem?.waktu_upload_laporan ? 'bg-green-500 border-green-500' : 'bg-slate-200 border-slate-300'}`}></div>
-                              <p className="text-xs font-semibold">Upload Laporan Litmas (PK)</p>
-                              <p className="text-[10px] text-slate-500">{formatDateTime(selectedItem?.waktu_upload_laporan)}</p>
-                          </div>
-
-                          {/* 4. Verifikasi Anev */}
-                          <div className="ml-6 relative">
-                              <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${selectedItem?.waktu_verifikasi_anev ? 'bg-green-500 border-green-500' : 'bg-slate-200 border-slate-300'}`}></div>
-                              <p className="text-xs font-semibold">Verifikasi & Approval (Anev)</p>
-                              <p className="text-[10px] text-slate-500">{formatDateTime(selectedItem?.waktu_verifikasi_anev)}</p>
-                          </div>
-
-                          {/* 5. Sidang TPP */}
-                          <div className="ml-6 relative">
-                              <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${selectedItem?.waktu_sidang_tpp ? 'bg-green-500 border-green-500' : 'bg-slate-200 border-slate-300'}`}></div>
-                              <p className="text-xs font-semibold">Pelaksanaan Sidang TPP</p>
-                              <p className="text-[10px] text-slate-500">{formatDateTime(selectedItem?.waktu_sidang_tpp)}</p>
-                          </div>
-
-                           {/* 6. Selesai */}
-                           <div className="ml-6 relative">
-                              <div className={`absolute -left-[31px] w-4 h-4 rounded-full border-2 ${selectedItem?.waktu_selesai ? 'bg-blue-600 border-blue-600' : 'bg-slate-200 border-slate-300'}`}></div>
-                              <p className="text-xs font-semibold text-blue-700">Selesai</p>
-                              <p className="text-[10px] text-slate-500">{formatDateTime(selectedItem?.waktu_selesai)}</p>
-                          </div>
                       </div>
                   </div>
 

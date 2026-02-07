@@ -16,7 +16,7 @@ import {
   ClipboardList, Gavel, CalendarDays, Loader2, Check, ChevronsUpDown, Search, 
   User, UserCheck, List, RefreshCw, Pencil, XCircle, MapPin, AlertTriangle, 
   Eye, FileText, ShieldAlert, Plus, Trash2, Phone, Briefcase, GraduationCap, AlertCircle, Save,
-  CloudUpload, History, Clock, ExternalLink
+  CloudUpload, History, Clock, ExternalLink, FileClock, CheckCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -78,6 +78,11 @@ export default function OperatorRegistrasiTest() {
   // UI States
   const [openDetail, setOpenDetail] = useState(false);
   const [detailData, setDetailData] = useState<any | null>(null);
+  
+  // STATE BARU: Detail Monitoring Litmas
+  const [openLitmasDetail, setOpenLitmasDetail] = useState(false);
+  const [selectedLitmasDetail, setSelectedLitmasDetail] = useState<any>(null);
+
   const [openHistory, setOpenHistory] = useState(false);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -103,6 +108,15 @@ export default function OperatorRegistrasiTest() {
   const [duplicatePayload, setDuplicatePayload] = useState<any>(null); 
 
   // --- LOGIC FUNCTIONS ---
+
+  // HELPER: Format Tanggal
+  const formatDateTime = (isoString: string | null) => {
+    if (!isoString) return '-';
+    return new Date(isoString).toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+  };
 
   // 1. REFRESH DATA EDIT (Agar data form selalu fresh setelah save)
   const refreshEditData = async (idKlien: number) => {
@@ -277,7 +291,6 @@ export default function OperatorRegistrasiTest() {
                   uploadedFileUrl = await uploadSuratPermintaan(fileSuratPermintaan, dataKlien.nama_klien);
                   setIsUploading(false);
                   if (uploadedFileUrl) {
-                      // FIX: Gunakan "as any" untuk menghindari error jika field belum ada di types
                       await supabase.from('litmas').update({ file_surat_permintaan_url: uploadedFileUrl } as any).eq('id_litmas', editingLitmas.id_litmas);
                       setFileSuratPermintaan(null);
                   }
@@ -355,7 +368,6 @@ export default function OperatorRegistrasiTest() {
 
               let litmasId = editingLitmas?.id_litmas;
               if(editingLitmas) {
-                  // FIX: Gunakan "as any" agar typescript tidak protes
                   const { error } = await supabase.from('litmas').update(dataLitmas as any).eq('id_litmas', litmasId);
                   if(error) throw error;
               } else {
@@ -753,7 +765,76 @@ export default function OperatorRegistrasiTest() {
             <Tabs defaultValue="list_klien" className="w-full">
               <div className="flex items-center justify-between mb-4"><TabsList><TabsTrigger value="list_klien">Data Klien</TabsTrigger><TabsTrigger value="list_litmas">Permintaan Litmas</TabsTrigger></TabsList><Button variant="ghost" size="sm" onClick={fetchTableData}><RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} /></Button></div>
               <TabsContent value="list_klien"><Card className="border-t-4 border-t-purple-600 shadow-sm"><CardHeader className="pb-2"><div className="flex justify-between"><div><CardTitle>Daftar Klien Terdaftar</CardTitle><CardDescription>Database klien {userRoleCategory}</CardDescription></div><div className="flex gap-2"><div className="relative w-60"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><Input placeholder="Cari Nama Klien..." className="pl-8" value={searchKlienQuery} onChange={(e) => setSearchKlienQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchKlien()} /></div><Button size="icon" variant="outline" onClick={handleSearchKlien}><Search className="w-4 h-4"/></Button></div></div></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Nama Klien</TableHead><TableHead>No. Register</TableHead><TableHead>JK</TableHead><TableHead>Usia</TableHead><TableHead>Aksi</TableHead></TableRow></TableHeader><TableBody>{dataKlienFull.length > 0 ? dataKlienFull.map((k) => (<TableRow key={k.id_klien}><TableCell className="font-medium">{k.nama_klien}</TableCell><TableCell>{k.nomor_register_lapas}</TableCell><TableCell>{k.jenis_kelamin}</TableCell><TableCell>{k.usia} Thn</TableCell><TableCell className="flex gap-2"><Button variant="outline" size="sm" className="h-8 px-2" onClick={() => { setDetailData(k); setOpenDetail(true); }}><Eye className="w-3.5 h-3.5 mr-1" /> Detail</Button><Button variant="outline" size="sm" onClick={() => handleEditClick(k)} className="h-8 px-2 text-blue-600"><Pencil className="w-3.5 h-3.5 mr-1" /> Edit</Button></TableCell></TableRow>)) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Data tidak ditemukan.</TableCell></TableRow>}</TableBody></Table></CardContent></Card></TabsContent>
-              <TabsContent value="list_litmas"><Card className="border-t-4 border-t-orange-600 shadow-sm"><CardHeader className="pb-2"><div className="flex justify-between"><div><CardTitle>Daftar Permintaan Litmas</CardTitle><CardDescription>Status registrasi.</CardDescription></div><div className="flex gap-2"><div className="relative w-60"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><Input placeholder="Cari No. Surat..." className="pl-8" value={searchLitmasQuery} onChange={(e) => setSearchLitmasQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchLitmas()} /></div><Button size="icon" variant="outline" onClick={handleSearchLitmas}><Search className="w-4 h-4"/></Button></div></div></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>No. Surat</TableHead><TableHead>Jenis</TableHead><TableHead>Klien</TableHead><TableHead>Petugas PK</TableHead></TableRow></TableHeader><TableBody>{dataLitmas.length > 0 ? dataLitmas.map((l) => (<TableRow key={l.id_litmas}><TableCell className="font-medium">{l.nomor_surat_permintaan}</TableCell><TableCell><Badge variant="secondary">{l.jenis_litmas}</Badge></TableCell><TableCell>{l.klien?.nama_klien}</TableCell><TableCell>{l.petugas_pk ? <span className="text-blue-700 font-medium flex items-center gap-1"><UserCheck className="w-3 h-3"/> {l.petugas_pk.nama}</span> : <span className="text-red-500 text-xs">Belum Ada</span>}</TableCell></TableRow>)) : <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">Data tidak ditemukan.</TableCell></TableRow>}</TableBody></Table></CardContent></Card></TabsContent>
+              <TabsContent value="list_litmas">
+                <Card className="border-t-4 border-t-orange-600 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between">
+                      <div><CardTitle>Daftar Permintaan Litmas</CardTitle><CardDescription>Status registrasi.</CardDescription></div>
+                      <div className="flex gap-2"><div className="relative w-60"><Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><Input placeholder="Cari No. Surat..." className="pl-8" value={searchLitmasQuery} onChange={(e) => setSearchLitmasQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchLitmas()} /></div><Button size="icon" variant="outline" onClick={handleSearchLitmas}><Search className="w-4 h-4"/></Button></div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>No. Surat</TableHead>
+                          <TableHead>Jenis & Status</TableHead>
+                          <TableHead>Klien</TableHead>
+                          <TableHead>Petugas PK</TableHead>
+                          <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dataLitmas.length > 0 ? dataLitmas.map((l) => (
+                          <TableRow key={l.id_litmas}>
+                            <TableCell className="font-medium">
+                                {l.nomor_surat_permintaan}
+                                <div className="text-[10px] text-slate-400 mt-1">
+                                    Tgl: {l.tanggal_surat_permintaan}
+                                </div>
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex flex-col gap-1 items-start">
+                                    <Badge variant="outline" className="text-xs">{l.jenis_litmas}</Badge>
+                                    <Badge className={
+                                        l.status === 'Approved' ? 'bg-green-600 hover:bg-green-700' :
+                                        l.status === 'Selesai' ? 'bg-blue-600 hover:bg-blue-700' :
+                                        l.status === 'On Progress' ? 'bg-blue-500 hover:bg-blue-600' :
+                                        l.status === 'Review' ? 'bg-yellow-500 hover:bg-yellow-600' :
+                                        'bg-slate-500 hover:bg-slate-600'
+                                    }>
+                                        {l.status || 'New Task'}
+                                    </Badge>
+                                </div>
+                            </TableCell>
+                            <TableCell>{l.klien?.nama_klien}</TableCell>
+                            <TableCell>
+                                {l.petugas_pk ? 
+                                    <span className="text-blue-700 font-medium flex items-center gap-1">
+                                        <UserCheck className="w-3 h-3"/> {l.petugas_pk.nama}
+                                    </span> : 
+                                    <span className="text-red-500 text-xs italic">Belum Ada PK</span>
+                                }
+                            </TableCell>
+                            <TableCell className="text-right">
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => { setSelectedLitmasDetail(l); setOpenLitmasDetail(true); }}
+                                >
+                                    <Eye className="w-4 h-4 text-slate-500 hover:text-blue-600"/>
+                                </Button>
+                            </TableCell>
+                          </TableRow>
+                        )) : (
+                          <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Data tidak ditemukan.</TableCell></TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
           </TabsContent>
         </Tabs>
@@ -817,7 +898,7 @@ export default function OperatorRegistrasiTest() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* DETAIL DIALOG */}
+      {/* DETAIL DIALOG (KLIEN) */}
       <Dialog open={openDetail} onOpenChange={setOpenDetail}>
         <DialogContent className="max-w-4xl h-[90vh] p-0 flex flex-col overflow-hidden">
           <DialogHeader className="p-6 pb-4 bg-slate-50 border-b shrink-0">
@@ -833,6 +914,144 @@ export default function OperatorRegistrasiTest() {
               </div>
             ) : (<div className="flex flex-col items-center justify-center h-64 text-slate-400"><Loader2 className="w-10 h-10 animate-spin mb-4 text-blue-500" /><p>Memuat data...</p></div>)}
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- DIALOG BARU: DETAIL MONITORING LITMAS (TIMELINE) --- */}
+      <Dialog open={openLitmasDetail} onOpenChange={setOpenLitmasDetail}>
+        <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
+            <DialogHeader>
+                <div className="flex items-center justify-between mr-8">
+                    <DialogTitle className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-600"/> Monitoring Progress Litmas
+                    </DialogTitle>
+                    <Badge variant="outline" className="text-sm px-3 py-1 bg-slate-50">
+                        {selectedLitmasDetail?.status || 'New Task'}
+                    </Badge>
+                </div>
+                <DialogDescription>
+                    Nomor Surat: <span className="font-mono text-slate-700 font-bold">{selectedLitmasDetail?.nomor_surat_permintaan}</span>
+                </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6 py-4">
+                
+                {/* INFO GRID */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-slate-50 p-5 rounded-lg border border-slate-100">
+                    <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nama Klien</span> 
+                        <p className="font-semibold text-slate-800">{selectedLitmasDetail?.klien?.nama_klien}</p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Jenis Litmas</span> 
+                        <p className="font-medium text-slate-700">{selectedLitmasDetail?.jenis_litmas}</p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Asal UPT</span> 
+                        <p className="font-medium text-slate-700">{selectedLitmasDetail?.asal_bapas || '-'}</p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">PK Penanggungjawab</span> 
+                        <p className="font-medium text-blue-700">{selectedLitmasDetail?.petugas_pk?.nama || 'Belum Ditunjuk'}</p>
+                    </div>
+                </div>
+
+                {/* DOKUMEN LINKS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="border p-3 rounded-md flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-slate-100 p-2 rounded"><FileText className="w-4 h-4 text-slate-600"/></div>
+                            <div className="text-xs">
+                                <span className="block font-medium text-slate-700">Surat Permintaan (Op)</span>
+                                <span className="text-slate-400">{selectedLitmasDetail?.file_surat_permintaan_url ? 'Tersedia' : 'Belum upload'}</span>
+                            </div>
+                        </div>
+                        {selectedLitmasDetail?.file_surat_permintaan_url && (
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => window.open(selectedLitmasDetail.file_surat_permintaan_url, '_blank')}>
+                                <ExternalLink className="w-3 h-3 mr-1"/> Lihat
+                            </Button>
+                        )}
+                    </div>
+                    <div className="border p-3 rounded-md flex items-center justify-between hover:bg-blue-50/50 transition-colors border-blue-100 bg-blue-50/20">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-100 p-2 rounded"><FileClock className="w-4 h-4 text-blue-600"/></div>
+                            <div className="text-xs">
+                                <span className="block font-medium text-blue-800">Hasil Litmas (PK)</span>
+                                <span className="text-blue-400">{selectedLitmasDetail?.hasil_litmas_url ? 'Siap Unduh' : 'Dalam Proses'}</span>
+                            </div>
+                        </div>
+                        {selectedLitmasDetail?.hasil_litmas_url && (
+                            <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => window.open(selectedLitmasDetail.hasil_litmas_url, '_blank')}>
+                                <ExternalLink className="w-3 h-3 mr-1"/> Lihat
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                {/* TIMELINE HISTORY VISUALIZATION */}
+                <div className="border rounded-lg p-5 bg-white shadow-sm">
+                    <h4 className="text-sm font-bold mb-5 flex items-center gap-2 text-slate-800">
+                        <History className="w-4 h-4 text-blue-600"/> Riwayat Pengerjaan
+                    </h4>
+                    <div className="relative border-l-2 border-slate-100 ml-3 space-y-8 pb-2">
+                        
+                        {/* 1. Registrasi */}
+                        <div className="ml-8 relative">
+                            <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedLitmasDetail?.waktu_registrasi ? 'bg-green-500' : 'bg-slate-200'}`}></div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-800">Registrasi Operator</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{formatDateTime(selectedLitmasDetail?.waktu_registrasi)}</p>
+                            </div>
+                        </div>
+
+                        {/* 2. Upload Surat Tugas */}
+                        <div className="ml-8 relative">
+                            <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedLitmasDetail?.waktu_upload_surat_tugas ? 'bg-green-500' : 'bg-slate-200'}`}></div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-800">PK: Menerima Tugas</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{selectedLitmasDetail?.waktu_upload_surat_tugas ? formatDateTime(selectedLitmasDetail.waktu_upload_surat_tugas) : 'Menunggu PK...'}</p>
+                            </div>
+                        </div>
+
+                        {/* 3. Upload Laporan */}
+                        <div className="ml-8 relative">
+                            <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedLitmasDetail?.waktu_upload_laporan ? 'bg-green-500' : 'bg-slate-200'}`}></div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-800">PK: Upload Laporan Litmas</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{selectedLitmasDetail?.waktu_upload_laporan ? formatDateTime(selectedLitmasDetail.waktu_upload_laporan) : 'Dalam Pengerjaan...'}</p>
+                            </div>
+                        </div>
+
+                        {/* 4. Verifikasi */}
+                        <div className="ml-8 relative">
+                            <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedLitmasDetail?.waktu_verifikasi_anev ? 'bg-green-500' : 'bg-slate-200'}`}></div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-800">Kasie/Anev: Verifikasi</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{selectedLitmasDetail?.waktu_verifikasi_anev ? formatDateTime(selectedLitmasDetail.waktu_verifikasi_anev) : 'Menunggu Verifikasi...'}</p>
+                            </div>
+                        </div>
+
+                        {/* 5. Sidang */}
+                        <div className="ml-8 relative">
+                            <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedLitmasDetail?.waktu_sidang_tpp ? 'bg-purple-600' : 'bg-slate-200'}`}></div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-800">Sidang TPP</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{selectedLitmasDetail?.waktu_sidang_tpp ? formatDateTime(selectedLitmasDetail.waktu_sidang_tpp) : 'Belum Sidang'}</p>
+                            </div>
+                        </div>
+
+                            {/* 6. Selesai */}
+                            <div className="ml-8 relative">
+                            <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm ${selectedLitmasDetail?.waktu_selesai ? 'bg-blue-600' : 'bg-slate-200'}`}></div>
+                            <div>
+                                <p className="text-xs font-bold text-blue-700">Selesai</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{selectedLitmasDetail?.waktu_selesai ? formatDateTime(selectedLitmasDetail.waktu_selesai) : '-'}</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
         </DialogContent>
       </Dialog>
     </TestPageLayout>

@@ -22,8 +22,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// --- INTERFACES FOR TYPE SAFETY ---
-// Define the shape of data we expect from Supabase to fix TypeScript errors
+// --- INTERFACES ---
 interface KlienData {
   id_klien: number;
   created_at: string;
@@ -40,7 +39,7 @@ interface LitmasData {
   nama_pk: string | null; // UUID string
 }
 
-// --- COLORS FOR CHARTS ---
+// --- COLORS ---
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 // --- MENU DEFINITION ---
@@ -60,7 +59,7 @@ const menuItems = [
   { path: '/about', permission:'access_admin', label: 'About', icon: Info},
 ];
 
-// --- HELPER COMPONENT: STAT CARD ---
+// --- STAT CARD COMPONENT ---
 const StatCard = ({ title, value, icon: Icon, description, colorClass = "text-slate-600", bgClass = "bg-slate-100" }: any) => (
   <Card className="shadow-sm border-t-4 border-t-transparent hover:border-t-primary transition-all bg-white">
     <CardContent className="pt-6">
@@ -78,10 +77,9 @@ const StatCard = ({ title, value, icon: Icon, description, colorClass = "text-sl
   </Card>
 );
 
-// --- ROLE-SPECIFIC COMPONENTS ---
+// --- ROLE-SPECIFIC WIDGETS ---
 
-// 1. ADMIN STATS
-const AdminStats = ({ stats }: { stats: { totalUser: number, totalRoles: number, activeLog: number } }) => (
+const AdminStats = ({ stats }: { stats: { totalUser: number, totalRoles: number } }) => (
   <div className="space-y-4 mb-8">
     <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
       <Shield className="w-5 h-5 text-red-600"/> Panel Administrator
@@ -89,33 +87,26 @@ const AdminStats = ({ stats }: { stats: { totalUser: number, totalRoles: number,
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <StatCard title="Total Pegawai" value={stats.totalUser} icon={Users} description="Data pegawai terdaftar" bgClass="bg-blue-100" colorClass="text-blue-600" />
       <StatCard title="Role Akses" value={stats.totalRoles} icon={Key} description="Level otorisasi aktif" bgClass="bg-purple-100" colorClass="text-purple-600" />
-      <StatCard title="Aktivitas" value="-" icon={Activity} description="Log sistem (N/A)" bgClass="bg-orange-100" colorClass="text-orange-600" />
+      <StatCard title="Aktivitas" value="-" icon={Activity} description="Log sistem" bgClass="bg-orange-100" colorClass="text-orange-600" />
       <StatCard title="Status Sistem" value="Online" icon={CheckCircle2} description="Koneksi DB Stabil" bgClass="bg-green-100" colorClass="text-green-600" />
     </div>
   </div>
 );
 
-// 2. KABAPAS STATS
 const KabapasStats = ({ stats, trendData, pieData }: any) => (
   <div className="space-y-6 mb-8">
     <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
       <Building2 className="w-5 h-5 text-primary"/> Eksekutif Dashboard
     </h3>
-    
-    {/* Summary Cards */}
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard title="Total Permintaan" value={stats.total} icon={Briefcase} description="Semua data masuk" bgClass="bg-slate-100" colorClass="text-slate-600" />
         <StatCard title="Sedang Berjalan" value={stats.onProgress} icon={Activity} description="Status proses/review" bgClass="bg-blue-100" colorClass="text-blue-600" />
         <StatCard title="Revisi/Kendala" value={stats.revision} icon={AlertTriangle} description="Dikembalikan" bgClass="bg-red-100" colorClass="text-red-600" />
         <StatCard title="Selesai" value={stats.completed} icon={CheckCircle2} description="Laporan Final" bgClass="bg-green-100" colorClass="text-green-600" />
     </div>
-
-    {/* Charts Area */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card className="border-0 shadow-md bg-white">
-        <CardHeader>
-          <CardTitle className="text-base font-medium text-slate-700">Tren Permintaan Litmas</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle className="text-base font-medium text-slate-700">Tren Permintaan Litmas</CardTitle></CardHeader>
         <CardContent>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -130,11 +121,8 @@ const KabapasStats = ({ stats, trendData, pieData }: any) => (
           </div>
         </CardContent>
       </Card>
-
       <Card className="border-0 shadow-md bg-white">
-          <CardHeader>
-              <CardTitle className="text-base font-medium text-slate-700">Jenis Permintaan</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base font-medium text-slate-700">Jenis Permintaan</CardTitle></CardHeader>
           <CardContent>
               <div className="h-[300px] w-full">
                   {pieData.length > 0 ? (
@@ -155,7 +143,6 @@ const KabapasStats = ({ stats, trendData, pieData }: any) => (
   </div>
 );
 
-// 3. KASIE / KASUBSIE STATS
 const SupervisorStats = ({ stats }: { stats: { needReview: number, tppScheduled: number, completionRate: number } }) => (
   <div className="space-y-4 mb-8">
     <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
@@ -169,7 +156,6 @@ const SupervisorStats = ({ stats }: { stats: { needReview: number, tppScheduled:
   </div>
 );
 
-// 4. PK STATS
 const PKStats = ({ userName, stats }: { userName: string, stats: { active: number, revision: number, doneMonth: number, nearDeadline: number } }) => (
   <div className="space-y-4 mb-8">
     <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
@@ -184,7 +170,6 @@ const PKStats = ({ userName, stats }: { userName: string, stats: { active: numbe
   </div>
 );
 
-// 5. OPERATOR STATS
 const OperatorStats = ({ stats }: { stats: { inputToday: number, incomplete: number, totalKlien: number } }) => (
   <div className="space-y-4 mb-8">
     <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
@@ -198,7 +183,6 @@ const OperatorStats = ({ stats }: { stats: { inputToday: number, incomplete: num
   </div>
 );
 
-
 // --- MAIN DASHBOARD COMPONENT ---
 export default function Dashboard() {
   const { user, signOut, hasPermission, hasRole } = useAuth();
@@ -206,116 +190,118 @@ export default function Dashboard() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // --- STATE FOR REAL DATA ---
+  // State for data
   const [loadingStats, setLoadingStats] = useState(true);
-  
-  // Data Holder
   const [globalStats, setGlobalStats] = useState({ total: 0, onProgress: 0, revision: 0, completed: 0 });
   const [supervisorStats, setSupervisorStats] = useState({ needReview: 0, tppScheduled: 0, completionRate: 0 });
   const [pkStats, setPkStats] = useState({ active: 0, revision: 0, doneMonth: 0, nearDeadline: 0 });
   const [operatorStats, setOperatorStats] = useState({ inputToday: 0, incomplete: 0, totalKlien: 0 });
-  const [adminStats, setAdminStats] = useState({ totalUser: 0, totalRoles: 0, activeLog: 0 });
-  
-  // Chart Data
-  const [statsKlien, setStatsKlien] = useState<any[]>([]);
+  const [adminStats, setAdminStats] = useState({ totalUser: 0, totalRoles: 0 });
   const [statsLitmasTrend, setStatsLitmasTrend] = useState<any[]>([]);
   const [statsLitmasJenis, setStatsLitmasJenis] = useState<any[]>([]);
+
+  // User Info
+  // @ts-ignore
+  const fotoUrl = user?.employee?.foto_url;
+  // @ts-ignore
+  const userName = user?.employee?.nama || 'User';
+  // @ts-ignore
+  const userJabatan = user?.employee?.jabatan || 'Staff';
 
   // --- FETCH DATA LOGIC ---
   useEffect(() => {
     const fetchRealData = async () => {
       setLoadingStats(true);
       try {
-        // 1. Fetch Employees (Untuk Admin)
-        // Note: Using 'any' cast here if type definition issues persist, otherwise standard fetch
-        const { count: employeeCount } = await supabase.from('employees').select('*', { count: 'exact', head: true });
-        setAdminStats(prev => ({ ...prev, totalUser: employeeCount || 0, totalRoles: 12 })); 
-
-        // 2. Fetch Klien (Untuk Operator & Charts)
-        // Explicitly cast result to KlienData[] to avoid Typescript errors on dynamic columns
-        const { data: rawKlienData } = await supabase.from('klien').select('id_klien, created_at, kategori_usia');
-        const rawKlien = (rawKlienData as unknown as KlienData[]) || [];
-        
-        // -- Logic Operator
-        const today = new Date().toISOString().split('T')[0];
-        const inputTodayCount = rawKlien.filter(k => k.created_at && k.created_at.startsWith(today)).length;
-        
-        setOperatorStats({
-            inputToday: inputTodayCount,
-            incomplete: 0, // Akan diupdate dari litmas
-            totalKlien: rawKlien.length
-        });
-
-        // -- Chart Kategori Klien
-        const klienCounts = rawKlien.reduce((acc: any, curr) => {
-          const kat = curr.kategori_usia || 'Tidak Diketahui';
-          acc[kat] = (acc[kat] || 0) + 1;
-          return acc;
-        }, {});
-        setStatsKlien(Object.keys(klienCounts).map(key => ({ name: key, value: klienCounts[key] })));
-
-        // 3. Fetch Litmas (Core Data)
-        // Explicitly cast result to LitmasData[]
-        const { data: rawLitmasData } = await supabase
-          .from('litmas')
-          .select('id_litmas, jenis_litmas, status, tanggal_diterima_bapas, created_at, waktu_selesai, nama_pk');
-
-        const allLitmas = (rawLitmasData as unknown as LitmasData[]) || [];
-
-        // -- Logic Global (Kabapas)
-        const total = allLitmas.length;
-        const onProgress = allLitmas.filter(l => ['New Task', 'On Progress', 'Review'].includes(l.status || '')).length;
-        const revision = allLitmas.filter(l => l.status === 'Revision').length;
-        const completed = allLitmas.filter(l => ['Selesai', 'Approved'].includes(l.status || '')).length;
-        
-        setGlobalStats({ total, onProgress, revision, completed });
-
-        // -- Logic Supervisor (Kasie/Kasubsie)
-        const needReview = allLitmas.filter(l => l.status === 'Review').length;
-        const tppScheduled = allLitmas.filter(l => l.status === 'TPP Scheduled').length;
-        const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
-        setSupervisorStats({ needReview, tppScheduled, completionRate: rate });
-
-        // -- Logic Operator (Lanjutan)
-        const newTasks = allLitmas.filter(l => l.status === 'New Task').length;
-        setOperatorStats(prev => ({ ...prev, incomplete: newTasks }));
-
-        // -- Logic PK (Personal)
-        if (user && user.id) {
-            const myLitmas = allLitmas.filter(l => l.nama_pk === user.id); 
-            const myActive = myLitmas.filter(l => !['Selesai', 'Approved'].includes(l.status || '')).length;
-            const myRevision = myLitmas.filter(l => l.status === 'Revision').length;
-            
-            // Hitung selesai bulan ini
-            const currentMonth = new Date().getMonth();
-            const myDoneMonth = myLitmas.filter(l => {
-                if (!['Selesai', 'Approved'].includes(l.status || '') || !l.waktu_selesai) return false;
-                return new Date(l.waktu_selesai).getMonth() === currentMonth;
-            }).length;
-
-            setPkStats({ active: myActive, revision: myRevision, doneMonth: myDoneMonth, nearDeadline: 0 });
+        // --- 1. ADMIN DATA (Only if Admin) ---
+        if (hasRole('admin')) {
+            const { count: employeeCount } = await supabase.from('employees').select('*', { count: 'exact', head: true });
+            setAdminStats(prev => ({ ...prev, totalUser: employeeCount || 0, totalRoles: 12 })); 
         }
 
-        // -- Chart Tren Bulanan
-        const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-        const trendMap = new Array(12).fill(0).map((_, i) => ({ name: months[i], masuk: 0 }));
-        allLitmas.forEach((l) => {
-          const dateRef = l.tanggal_diterima_bapas || l.created_at;
-          if (dateRef) {
-            const mIdx = new Date(dateRef).getMonth();
-            if (mIdx >= 0 && mIdx < 12) trendMap[mIdx].masuk += 1;
-          }
-        });
-        const currentMonthIdx = new Date().getMonth();
-        setStatsLitmasTrend(trendMap.slice(0, currentMonthIdx + 1));
+        // --- 2. OPERATOR DATA (Only if Operator) ---
+        if (hasRole('op_reg_anak') || hasRole('op_reg_dewasa')) {
+            const { data: rawKlienData } = await supabase.from('klien').select('id_klien, created_at');
+            const rawKlien = (rawKlienData as unknown as KlienData[]) || [];
+            
+            const today = new Date().toISOString().split('T')[0];
+            const inputTodayCount = rawKlien.filter(k => k.created_at && k.created_at.startsWith(today)).length;
+            
+            setOperatorStats(prev => ({
+                ...prev,
+                inputToday: inputTodayCount,
+                totalKlien: rawKlien.length
+            }));
+        }
 
-        // -- Chart Jenis Permintaan
-        const jenisCounts = allLitmas.reduce((acc: any, curr) => {
-          const jenis = curr.jenis_litmas || 'Lainnya';
-          acc[jenis] = (acc[jenis] || 0) + 1;
-          return acc;
-        }, {});
-        setStatsLitmasJenis(Object.keys(jenisCounts).map(key => ({ name: key, value: jenisCounts[key] })));
+        // --- 3. LITMAS DATA (Shared for Kabapas, Kasie, PK, Operator) ---
+        if (hasRole('kabapas') || hasRole('kasie') || hasRole('kasubsie') || hasRole('pk') || hasRole('op_reg_anak') || hasRole('op_reg_dewasa')) {
+            const { data: rawLitmasData } = await supabase
+            .from('litmas')
+            .select('id_litmas, jenis_litmas, status, tanggal_diterima_bapas, created_at, waktu_selesai, nama_pk');
+
+            const allLitmas = (rawLitmasData as unknown as LitmasData[]) || [];
+
+            // Kabapas Logic
+            if (hasRole('kabapas')) {
+                const total = allLitmas.length;
+                const onProgress = allLitmas.filter(l => ['New Task', 'On Progress', 'Review'].includes(l.status || '')).length;
+                const revision = allLitmas.filter(l => l.status === 'Revision').length;
+                const completed = allLitmas.filter(l => ['Selesai', 'Approved'].includes(l.status || '')).length;
+                setGlobalStats({ total, onProgress, revision, completed });
+
+                // Charts
+                const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+                const trendMap = new Array(12).fill(0).map((_, i) => ({ name: months[i], masuk: 0 }));
+                allLitmas.forEach((l) => {
+                    const dateRef = l.tanggal_diterima_bapas || l.created_at;
+                    if (dateRef) {
+                        const mIdx = new Date(dateRef).getMonth();
+                        if (mIdx >= 0 && mIdx < 12) trendMap[mIdx].masuk += 1;
+                    }
+                });
+                const currentMonthIdx = new Date().getMonth();
+                setStatsLitmasTrend(trendMap.slice(0, currentMonthIdx + 1));
+
+                const jenisCounts = allLitmas.reduce((acc: any, curr) => {
+                    const jenis = curr.jenis_litmas || 'Lainnya';
+                    acc[jenis] = (acc[jenis] || 0) + 1;
+                    return acc;
+                }, {});
+                setStatsLitmasJenis(Object.keys(jenisCounts).map(key => ({ name: key, value: jenisCounts[key] })));
+            }
+
+            // Supervisor Logic (Kasie/Kasubsie)
+            if (hasRole('kasie') || hasRole('kasubsie')) {
+                const total = allLitmas.length;
+                const completed = allLitmas.filter(l => ['Selesai', 'Approved'].includes(l.status || '')).length;
+                const needReview = allLitmas.filter(l => l.status === 'Review').length;
+                const tppScheduled = allLitmas.filter(l => l.status === 'TPP Scheduled').length;
+                const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+                setSupervisorStats({ needReview, tppScheduled, completionRate: rate });
+            }
+
+            // PK Logic
+            if (hasRole('pk') && user?.id) {
+                const myLitmas = allLitmas.filter(l => l.nama_pk === user.id); 
+                const myActive = myLitmas.filter(l => !['Selesai', 'Approved'].includes(l.status || '')).length;
+                const myRevision = myLitmas.filter(l => l.status === 'Revision').length;
+                
+                const currentMonth = new Date().getMonth();
+                const myDoneMonth = myLitmas.filter(l => {
+                    if (!['Selesai', 'Approved'].includes(l.status || '') || !l.waktu_selesai) return false;
+                    return new Date(l.waktu_selesai).getMonth() === currentMonth;
+                }).length;
+
+                setPkStats({ active: myActive, revision: myRevision, doneMonth: myDoneMonth, nearDeadline: 0 });
+            }
+
+            // Operator Logic (Update Incomplete)
+            if (hasRole('op_reg_anak') || hasRole('op_reg_dewasa')) {
+                const newTasks = allLitmas.filter(l => l.status === 'New Task').length;
+                setOperatorStats(prev => ({ ...prev, incomplete: newTasks }));
+            }
+        }
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -333,12 +319,6 @@ export default function Dashboard() {
   };
 
   const accessibleMenus = menuItems.filter(item => hasPermission(item.permission));
-  // @ts-ignore
-  const fotoUrl = user?.employee?.foto_url;
-  // @ts-ignore
-  const userName = user?.employee?.nama || 'User';
-  // @ts-ignore
-  const userJabatan = user?.employee?.jabatan || 'Staff';
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white border-r">
@@ -421,9 +401,7 @@ export default function Dashboard() {
 
           <Separator />
 
-          {/* === DYNAMIC INFOGRAPHICS SECTION BASED ON ROLE === */}
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            
             {loadingStats ? (
                <div className="flex items-center justify-center h-48 bg-white/50 rounded-xl border border-dashed border-slate-300">
                   <div className="flex flex-col items-center gap-2 text-slate-500">
@@ -433,27 +411,15 @@ export default function Dashboard() {
                </div>
             ) : (
                 <>
-                    {/* 1. ADMIN VIEW */}
                     {hasRole('admin') && <AdminStats stats={adminStats} />}
-
-                    {/* 2. KABAPAS VIEW (Global Stats) */}
-                    {hasRole('kabapas') && (
-                        <KabapasStats stats={globalStats} trendData={statsLitmasTrend} pieData={statsLitmasJenis} />
-                    )}
-
-                    {/* 3. KASIE / KASUBSIE VIEW */}
+                    {hasRole('kabapas') && <KabapasStats stats={globalStats} trendData={statsLitmasTrend} pieData={statsLitmasJenis} />}
                     {(hasRole('kasie') || hasRole('kasubsie')) && <SupervisorStats stats={supervisorStats} />}
-
-                    {/* 4. PK VIEW (Personalized) */}
                     {hasRole('pk') && <PKStats userName={userName} stats={pkStats} />}
-
-                    {/* 5. OPERATOR VIEW */}
                     {(hasRole('op_reg_anak') || hasRole('op_reg_dewasa')) && <OperatorStats stats={operatorStats} />}
                 </>
             )}
           </div>
 
-          {/* Shared Content */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
              <Card className="border-none shadow-md bg-gradient-to-br from-slate-900 to-slate-800 text-white overflow-hidden relative">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
