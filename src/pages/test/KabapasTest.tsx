@@ -508,7 +508,7 @@ export default function KabapasTest() {
                               { label: "Registrasi Masuk", date: selectedItem?.waktu_registrasi, active: !!selectedItem?.waktu_registrasi },
                               { label: "Surat Tugas Diupload", date: selectedItem?.waktu_upload_surat_tugas, active: !!selectedItem?.waktu_upload_surat_tugas },
                               { label: "Laporan Litmas Selesai", date: selectedItem?.waktu_upload_laporan, active: !!selectedItem?.waktu_upload_laporan },
-                              { label: "Verifikasi Kasie/Kasubsi", date: selectedItem?.waktu_verifikasi_anev, active: !!selectedItem?.waktu_verifikasi_anev },
+                              { label: "Verifikasi Anev", date: selectedItem?.waktu_verifikasi_anev, active: !!selectedItem?.waktu_verifikasi_anev },
                               { label: "Sidang TPP", date: selectedItem?.waktu_sidang_tpp, active: !!selectedItem?.waktu_sidang_tpp },
                               { label: "Selesai", date: selectedItem?.waktu_selesai, active: !!selectedItem?.waktu_selesai, isFinal: true },
                           ].map((step, idx) => (

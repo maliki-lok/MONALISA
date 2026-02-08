@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar, Upload, Clock, CheckCircle, CheckSquare, Eye } from 'lucide-react';
+import { Calendar, Upload, Clock, CheckCircle, CheckSquare, Eye, FileText } from 'lucide-react';
 import { SuratTugasGenerator } from '@/components/litmas/SuratTugasGenerator';
 
 interface PKTaskTableProps {
@@ -66,8 +66,8 @@ export function PKTaskTable({ tasks, loading, onViewDetail, onUpload, onOpenRegi
                 <TableCell className="align-top py-4">
                     <div className="flex flex-col gap-2 items-start">
                         <Badge className={
-                            status === 'Disetujui' ? 'bg-green-600 hover:bg-green-700' :
-                            status === 'Ditolak' ? 'bg-red-600 hover:bg-red-700' :
+                            status === 'Approved' ? 'bg-green-600 hover:bg-green-700' :
+                            status === 'Revision' ? 'bg-orange-500 hover:bg-orange-600' :
                             status === 'On Progress' ? 'bg-blue-600 hover:bg-blue-700' : 
                             status === 'TPP Scheduled' ? 'bg-purple-600 hover:bg-purple-700' :
                             status === 'Selesai' ? 'bg-slate-600 hover:bg-slate-700' :
@@ -110,6 +110,7 @@ export function PKTaskTable({ tasks, loading, onViewDetail, onUpload, onOpenRegi
                 <TableCell className="align-top py-4 text-right pr-6">
                     <div className="w-full max-w-[200px] ml-auto space-y-2">
                     
+                    {/* SURAT TUGAS: Masih boleh upload langsung karena tidak butuh Anev */}
                     {status === 'New Task' && (
                         <div className="space-y-2">
                             <div className="w-full"><SuratTugasGenerator litmasId={task.id_litmas} /></div>
@@ -122,12 +123,17 @@ export function PKTaskTable({ tasks, loading, onViewDetail, onUpload, onOpenRegi
                         </div>
                     )}
 
+                    {/* LAPORAN LITMAS: KITA UBAH DISINI */}
+                    {/* Hapus Input File Langsung, Ganti dengan Tombol Buka Dialog */}
                     {(status === 'On Progress' || status === 'Revision') && (
                         <div className="relative w-full">
-                            <Button size="sm" className="bg-blue-600 w-full hover:bg-blue-700 text-xs h-9 shadow-sm font-medium">
-                                <Upload className="w-3 h-3 mr-2"/> Upload Laporan
+                            <Button 
+                                size="sm" 
+                                className="bg-blue-600 w-full hover:bg-blue-700 text-xs h-9 shadow-sm font-medium"
+                                onClick={() => onViewDetail(task)} // Buka dialog detail
+                            >
+                                <FileText className="w-3 h-3 mr-2"/> Upload Laporan
                             </Button>
-                            <Input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0], task.id_litmas, 'hasil_litmas')} />
                         </div>
                     )}
 

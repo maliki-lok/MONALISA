@@ -1,283 +1,282 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { TestPageLayout } from '@/components/TestPageLayout';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from '@/hooks/use-toast';
-import { BarChart3, Eye, Check, X, FileText, ExternalLink, History, Clock } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { FileText, CheckCircle2, XCircle, Search, BarChart3, ExternalLink } from "lucide-react"; // Tambah icon ExternalLink
+import { Input } from "@/components/ui/input";
+import { TestPageLayout } from "@/components/TestPageLayout"; 
 
 export default function AnevTest() {
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
-  
-  // State Data
-  const [reviews, setReviews] = useState<any[]>([]); // Data Antrian
-  const [history, setHistory] = useState<any[]>([]); // Data Riwayat
-  const [loading, setLoading] = useState(false);
-  
-  // State Actions
-  const [notes, setNotes] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // --- FETCH DATA ---
+  // --- HELPER BARU: Generate URL ---
+  const getDocUrl = (path: string | null) => {
+    if (!path) return "#";
+    // Jika sudah full URL (mungkin data lama), biarkan
+    if (path.startsWith('http')) return path;
+    
+    // Generate Public URL dari Supabase Storage
+    const { data } = supabase.storage.from('documents').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-        // 1. Ambil Antrian (Status = Review)
-        const { data: dataReview, error: errReview } = await (supabase as any)
-          .from('litmas')
-          .select(`
-            *,
-            klien:klien!fk_litmas_klien(nama_klien, nomor_register_lapas),
-            petugas_pk:petugas_pk!fk_litmas_pk(nama)
-          `)
-          .eq('status', 'Review') 
-          .order('created_at', { ascending: true }); // Yang lama dulu (FIFO)
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+         setLoading(false);
+         return; 
+      }
 
-        if (errReview) throw errReview;
-        setReviews(dataReview || []);
+      // 1. Ambil Antrian Review (Hanya milik Anev ini)
+      const { data: dataReview, error: errReview } = await (supabase as any)
+        .from('litmas')
+        .select(`
+          *,
+          klien:klien!litmas_id_klien_fkey (nama_klien, nomor_register_lapas),
+          petugas_pk:petugas_pk!litmas_nama_pk_fkey (nama)
+        `)
+        .eq('status', 'Review')
+        .eq('assigned_anev_id', user.id)
+        .order('waktu_upload_laporan', { ascending: true });
 
-        // 2. Ambil History (Status != New Task, On Progress, Review)
-        // Artinya ambil yang sudah Approved, Revision, atau sudah masuk TPP
-        const { data: dataHistory, error: errHistory } = await (supabase as any)
-          .from('litmas')
-          .select(`
-            *,
-            klien:klien!fk_litmas_klien(nama_klien, nomor_register_lapas),
-            petugas_pk:petugas_pk!fk_litmas_pk(nama)
-          `)
-          .not('status', 'in', '("New Task","On Progress","Review")') 
-          .order('created_at', { ascending: false }); // Yang terbaru paling atas
+      if (errReview) throw errReview;
+      setReviews(dataReview || []);
 
-        if (errHistory) throw errHistory;
-        setHistory(dataHistory || []);
+      // 2. Ambil History (Hanya milik Anev ini)
+      const { data: dataHistory, error: errHistory } = await (supabase as any)
+        .from('litmas')
+        .select(`
+          *,
+          klien:klien!litmas_id_klien_fkey (nama_klien, nomor_register_lapas),
+          petugas_pk:petugas_pk!litmas_nama_pk_fkey (nama)
+        `)
+        .not('status', 'in', '("New Task","On Progress","Review")') 
+        .eq('assigned_anev_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (errHistory) throw errHistory;
+      setHistory(dataHistory || []);
 
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  // --- HANDLER KEPUTUSAN ---
-  const handleDecision = async (id: number, decision: 'Approved' | 'Revision') => {
-    if (decision === 'Revision' && !notes) {
-      toast({ variant: "destructive", title: "Gagal", description: "Catatan revisi wajib diisi" });
-      return;
-    }
-
+  const handleApprove = async (id: number) => {
     try {
-      const updatePayload: any = {
-        status: decision,
-        anev_notes: decision === 'Revision' ? notes : null,
-        waktu_verifikasi_anev: new Date().toISOString()
-        // reviewed_at: new Date().toISOString() // Pastikan kolom ini ada di DB, jika tidak hapus baris ini
+      const updatePayload: any = { 
+        status: 'Approved',
+        waktu_verifikasi_anev: new Date().toISOString() // Gunakan nama kolom yang benar
       };
 
-      const { error } = await supabase.from('litmas').update(updatePayload).eq('id_litmas', id);
+      const { error } = await supabase
+        .from('litmas')
+        .update(updatePayload)
+        .eq('id_litmas', id);
 
       if (error) throw error;
-
-      toast({ title: "Berhasil", description: decision === 'Approved' ? "Litmas Disetujui" : "Dikembalikan ke PK untuk Revisi" });
-      setNotes('');
-      setDialogOpen(false);
-      fetchData(); // Refresh kedua tabel
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ title: "Sukses", description: "Laporan disetujui." });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
     }
   };
 
-  const openDoc = (path: string) => {
-    if(!path) return;
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    window.open(data.publicUrl, '_blank');
+  const handleRevision = async (id: number) => {
+    try {
+      const updatePayload: any = { status: 'Revision' };
+      
+      const { error } = await supabase
+        .from('litmas')
+        .update(updatePayload)
+        .eq('id_litmas', id);
+
+      if (error) throw error;
+      toast({ title: "Revisi", description: "Laporan dikembalikan ke PK untuk revisi." });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
   };
 
+  const filteredReviews = reviews.filter(r => 
+    r.klien?.nama_klien.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.jenis_litmas.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <TestPageLayout
-      title="Dashboard Anev"
-      description="Pemeriksaan & Verifikasi Laporan Penelitian Kemasyarakatan"
+    <TestPageLayout 
+      title="Dashboard Anev" 
+      description="Verifikasi dan monitoring laporan litmas yang masuk."
       permissionCode="access_anev"
-      icon={<BarChart3 className="w-8 h-8 text-primary" />}
+      icon={<BarChart3 className="w-6 h-6" />}
     >
-      <Tabs defaultValue="antrian" className="space-y-6">
+      <div className="space-y-6">
         
-        {/* TABS HEADER */}
-        <div className="flex justify-between items-center">
-            <TabsList className="grid w-[400px] grid-cols-2">
-                <TabsTrigger value="antrian" className="flex items-center gap-2">
-                    <Clock className="w-4 h-4"/> Antrian
-                    {reviews.length > 0 && <Badge className="ml-1 bg-yellow-600 hover:bg-yellow-600 h-5 w-5 p-0 flex items-center justify-center rounded-full">{reviews.length}</Badge>}
-                </TabsTrigger>
-                <TabsTrigger value="history" className="flex items-center gap-2">
-                    <History className="w-4 h-4"/> Riwayat
-                </TabsTrigger>
-            </TabsList>
-            <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>Refresh Data</Button>
-        </div>
-
-        {/* --- TAB 1: ANTRIAN VERIFIKASI --- */}
-        <TabsContent value="antrian">
-            {reviews.length === 0 ? (
-                <div className="text-center p-12 bg-slate-50 border rounded-lg text-slate-500 border-dashed">
-                    <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300"/>
-                    <h3 className="font-medium text-slate-900">Semua Bersih</h3>
-                    <p className="text-sm">Tidak ada laporan litmas yang perlu diverifikasi saat ini.</p>
-                </div>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {reviews.map((item) => (
-                        <Card key={item.id_litmas} className="border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-3 bg-slate-50/50">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="text-base font-bold text-slate-800">{item.klien?.nama_klien}</CardTitle>
-                                        <p className="text-xs text-slate-500 font-mono mt-1">{item.jenis_litmas}</p>
-                                    </div>
-                                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">Perlu Review</Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="pt-4">
-                                <div className="text-sm space-y-2 mb-5">
-                                    <div className="flex justify-between border-b pb-2">
-                                        <span className="text-slate-500">PK Penanggung Jawab:</span>
-                                        <span className="font-medium">{item.petugas_pk?.nama}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b pb-2">
-                                        <span className="text-slate-500">No. Surat:</span>
-                                        <span className="font-mono text-xs">{item.nomor_surat_permintaan}</span>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3 mb-5">
-                                    {/* Tombol UTAMA: Lihat Laporan */}
-                                    <Button 
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm" 
-                                        size="sm" 
-                                        onClick={() => openDoc(item.hasil_litmas_url)}
-                                    >
-                                        <Eye className="w-4 h-4 mr-2"/> Buka Laporan Litmas
-                                    </Button>
-                                    
-                                    {/* Link Referensi Surat Tugas */}
-                                    {item.surat_tugas_signed_url && (
-                                        <div 
-                                            onClick={() => openDoc(item.surat_tugas_signed_url)}
-                                            className="flex items-center justify-center gap-1 text-[11px] text-slate-400 hover:text-blue-600 cursor-pointer transition-colors"
-                                        >
-                                            <ExternalLink className="w-3 h-3"/> Lihat Surat Tugas (Referensi)
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex gap-2 border-t pt-4">
-                                    <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={() => handleDecision(item.id_litmas, 'Approved')}>
-                                        <Check className="w-4 h-4 mr-2"/> Terima
-                                    </Button>
-
-                                    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button variant="outline" size="sm" className="flex-1 border-red-200 text-red-700 hover:bg-red-50" onClick={() => setSelectedId(item.id_litmas)}>
-                                                <X className="w-4 h-4 mr-2"/> Revisi
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogTitle>Catatan Revisi</DialogTitle>
-                                            <Textarea 
-                                                placeholder="Jelaskan bagian yang perlu diperbaiki oleh PK..." 
-                                                value={notes}
-                                                onChange={(e) => setNotes(e.target.value)}
-                                                className="min-h-[100px]"
-                                            />
-                                            <DialogFooter>
-                                                <Button onClick={() => selectedId && handleDecision(selectedId, 'Revision')}>
-                                                    Kirim Revisi
-                                                </Button>
-                                            </DialogFooter>
-                                        </DialogContent>
-                                    </Dialog>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-        </TabsContent>
-
-        {/* --- TAB 2: RIWAYAT / HISTORY --- */}
-        <TabsContent value="history">
+        {/* Statistik Ringkas */}
+        <div className="grid gap-4 md:grid-cols-3">
             <Card>
-                <CardHeader>
-                    <CardTitle>Riwayat Pemeriksaan</CardTitle>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Antrian Review</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Klien</TableHead>
-                                <TableHead>Jenis Litmas</TableHead>
-                                <TableHead>Petugas PK</TableHead>
-                                <TableHead>Status Keputusan</TableHead>
-                                <TableHead>Catatan / Info</TableHead>
-                                <TableHead className="text-right">Aksi</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {history.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Belum ada riwayat pemeriksaan.</TableCell>
-                                </TableRow>
-                            ) : (
-                                history.map((item) => (
-                                    <TableRow key={item.id_litmas}>
-                                        <TableCell>
-                                            <div className="font-bold">{item.klien?.nama_klien}</div>
-                                            <div className="text-xs text-muted-foreground">{item.klien?.nomor_register_lapas}</div>
-                                        </TableCell>
-                                        <TableCell>{item.jenis_litmas}</TableCell>
-                                        <TableCell>{item.petugas_pk?.nama}</TableCell>
-                                        <TableCell>
-                                            <Badge className={
-                                                item.status === 'Approved' ? 'bg-green-600' :
-                                                item.status === 'Revision' ? 'bg-red-600' :
-                                                item.status === 'TPP Registered' || item.status === 'TPP Scheduled' ? 'bg-purple-600' :
-                                                item.status === 'Selesai' ? 'bg-slate-600' :
-                                                'bg-slate-500'
-                                            }>
-                                                {item.status === 'Approved' ? 'Disetujui' : item.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="max-w-xs">
-                                            {item.status === 'Revision' ? (
-                                                <div className="text-xs text-red-600 italic border-l-2 border-red-200 pl-2">
-                                                    "{item.anev_notes}"
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-slate-400">-</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => openDoc(item.hasil_litmas_url)}>
-                                                <FileText className="w-4 h-4 text-slate-500"/>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
+                    <div className="text-2xl font-bold">{reviews.length}</div>
+                    <p className="text-xs text-muted-foreground">Menunggu verifikasi Anda</p>
                 </CardContent>
             </Card>
-        </TabsContent>
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Total Diproses</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{history.length}</div>
+                    <p className="text-xs text-muted-foreground">Laporan selesai diverifikasi</p>
+                </CardContent>
+            </Card>
+        </div>
 
-      </Tabs>
+        {/* Tabel Antrian Review */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+                <div>
+                    <CardTitle>Daftar Verifikasi Masuk</CardTitle>
+                    <CardDescription>Laporan Litmas yang ditugaskan kepada Anda.</CardDescription>
+                </div>
+                <div className="relative w-64">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Cari nama klien..." 
+                        className="pl-8" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Klien</TableHead>
+                  <TableHead>Jenis Litmas</TableHead>
+                  <TableHead>PK Pembuat</TableHead>
+                  <TableHead>Waktu Upload</TableHead>
+                  <TableHead>File Laporan</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                    <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">Memuat data...</TableCell>
+                    </TableRow>
+                ) : filteredReviews.length === 0 ? (
+                    <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            Tidak ada antrian review saat ini.
+                        </TableCell>
+                    </TableRow>
+                ) : (
+                    filteredReviews.map((item) => (
+                    <TableRow key={item.id_litmas}>
+                        <TableCell className="font-medium">
+                            {item.klien?.nama_klien}
+                            <div className="text-xs text-muted-foreground">{item.klien?.nomor_register_lapas}</div>
+                        </TableCell>
+                        <TableCell>{item.jenis_litmas}</TableCell>
+                        <TableCell>{item.petugas_pk?.nama}</TableCell>
+                        <TableCell>
+                            {item.waktu_upload_laporan ? new Date(item.waktu_upload_laporan).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell>
+                            {item.hasil_litmas_url ? (
+                                // PERBAIKAN DISINI: Gunakan helper getDocUrl
+                                <a 
+                                  href={getDocUrl(item.hasil_litmas_url)} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="flex items-center text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                >
+                                    <FileText className="h-4 w-4 mr-1" /> Buka Laporan <ExternalLink className="h-3 w-3 ml-1"/>
+                                </a>
+                            ) : (
+                                <span className="text-slate-400 italic">Belum upload</span>
+                            )}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={() => handleRevision(item.id_litmas)}>
+                                <XCircle className="h-4 w-4 mr-1" /> Revisi
+                            </Button>
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApprove(item.id_litmas)}>
+                                <CheckCircle2 className="h-4 w-4 mr-1" /> Setujui
+                            </Button>
+                        </TableCell>
+                    </TableRow>
+                    ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Tabel Riwayat */}
+        <Card>
+            <CardHeader>
+                <CardTitle>Riwayat Verifikasi</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Klien</TableHead>
+                            <TableHead>Jenis Litmas</TableHead>
+                            <TableHead>PK</TableHead>
+                            <TableHead>Status Akhir</TableHead>
+                            <TableHead>Tanggal</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {history.map((item) => (
+                            <TableRow key={item.id_litmas}>
+                                <TableCell>{item.klien?.nama_klien}</TableCell>
+                                <TableCell>{item.jenis_litmas}</TableCell>
+                                <TableCell>{item.petugas_pk?.nama}</TableCell>
+                                <TableCell>
+                                    <Badge variant={item.status === 'Approved' || item.status === 'TPP Registered' ? 'default' : 'secondary'}>
+                                        {item.status}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>{new Date(item.created_at).toLocaleDateString()}</TableCell>
+                            </TableRow>
+                        ))}
+                         {history.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground">Belum ada riwayat.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+
+      </div>
     </TestPageLayout>
   );
 }

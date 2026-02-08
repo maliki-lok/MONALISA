@@ -13,7 +13,7 @@ import { PKTaskTable } from '@/components/pk/PKTaskTable';
 import { PKRegisterDialog } from '@/components/pk/PKRegisterDialog';
 import { PKDetailDialog } from '@/components/pk/PKDetailDialog';
 
-// --- 1. DEFINISI TIPE MANUAL ---
+// --- 1. DEFINISI TIPE MANUAL (Update untuk mengakomodasi variasi nama kolom) ---
 interface LitmasTaskData {
   id_litmas: number;
   created_at: string;
@@ -30,6 +30,11 @@ interface LitmasTaskData {
   waktu_sidang_tpp: string | null;
   waktu_selesai: string | null;
   asal_bapas: string | null;
+  
+  // Variasi nama kolom ID Anev (salah satu pasti terisi)
+  id_anev?: string | null; 
+  assigned_anev_id?: string | null; 
+
   klien: {
     nama_klien: string;
     nomor_register_lapas: string;
@@ -45,31 +50,16 @@ interface LitmasTaskData {
   } | null;
 }
 
-// --- 2. FUNGSI FETCHER DI LUAR KOMPONEN (SOLUSI TS2589) ---
-// Kita pisahkan fungsi ini agar TypeScript tidak melakukan deep inference terhadap state React
-// --- 2. FUNGSI FETCHER DI LUAR KOMPONEN (SOLUSI TS2589) ---
+// --- 2. FUNGSI FETCHER DI LUAR KOMPONEN ---
 async function getLitmasTasksExternal(client: any, userId: string, isAdmin: boolean) {
     let pkId = null;
     
-    // Cek ID PK jika bukan admin
     if (!isAdmin) {
         const { data, error } = await client.from('petugas_pk').select('id, nama').eq('user_id', userId).maybeSingle();
-        
-        if (error) {
-            console.error("Error fetch PK Profile:", error);
-            return { data: [], error };
-        }
-        
-        if (!data) {
-            console.warn("User ini login, tapi tidak ditemukan di tabel petugas_pk (user_id mismatch).");
-            return { data: [], error: null };
-        }
-
+        if (error || !data) return { data: [], error: error || 'PK Not Found' };
         pkId = data.id;
-        console.log("Login sebagai PK:", data.nama, "| ID PK:", pkId); // Debugging
     }
 
-    // Query dengan Explicit Foreign Key Hints
     let query = client
         .from('litmas')
         .select(`
@@ -80,13 +70,9 @@ async function getLitmasTasksExternal(client: any, userId: string, isAdmin: bool
         `)
         .order('created_at', { ascending: false });
 
-    // FILTER WAJIB: Hanya tampilkan yang ditugaskan ke PK ini
     if (!isAdmin && pkId) {
         query = query.eq('nama_pk', pkId);
-    } 
-    // TAMBAHAN: Jika bukan admin DAN tidak punya pkId (akun nyasar), jangan tampilkan apa-apa
-    else if (!isAdmin && !pkId) {
-        // Return kosong agar tidak bocor data lain
+    } else if (!isAdmin && !pkId) {
         return { data: [], error: null };
     }
 
@@ -98,19 +84,20 @@ export default function PKTest() {
   const { toast } = useToast();
   const { user, hasRole } = useAuth();
   
-  // State
   const [tasks, setTasks] = useState<LitmasTaskData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   
-  // Dialogs
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [selectedLitmasId, setSelectedLitmasId] = useState<number | null>(null);
   const [availableSchedules, setAvailableSchedules] = useState<any[]>([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+
+  const [pkName, setPkName] = useState("");
 
   const isAdmin = hasRole('admin');
 
@@ -119,17 +106,26 @@ export default function PKTest() {
     if (!user) return;
     setLoading(true);
     try {
-      // Panggil fungsi external
       // @ts-ignore
       const { data, error } = await getLitmasTasksExternal((supabase as any), user.id, isAdmin);
-      
       if (error) throw error;
       
-      if (data) {
-        setTasks(data as unknown as LitmasTaskData[]);
+      // Debug: Cek struktur data pertama untuk melihat nama kolom
+      if(data && data.length > 0) {
+          console.log("Sample Data Litmas (Cek kolom anev):", data[0]);
+      }
+
+      if (data) setTasks(data as unknown as LitmasTaskData[]);
+
+      if (!isAdmin) {
+        //@ts-ignore
+          const { data: pkData } = await supabase.from('petugas_pk').select('nama').eq('user_id', user.id).single();
+          if (pkData) setPkName(pkData.nama);
+      } else {
+          setPkName("Administrator");
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Error Fetch", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -138,7 +134,6 @@ export default function PKTest() {
   useEffect(() => { 
       fetchMyTasks(); 
       const fetchSchedules = async () => {
-          // Casting any juga di sini untuk keamanan
           const { data } = await (supabase as any)
             .from('tpp_schedules').select('*').eq('status', 'Open').gte('tanggal_sidang', new Date().toISOString()); 
           setAvailableSchedules(data || []);
@@ -147,15 +142,22 @@ export default function PKTest() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);
 
-  // --- ACTIONS ---
+  // --- ACTIONS (UPLOAD & NOTIFY FIX) ---
   const handleUpload = async (file: File, taskId: number, type: 'surat_tugas' | 'hasil_litmas') => {
     setUploadingId(taskId);
+    // DEBUG LOG 1: Pastikan fungsi terpanggil
+    console.log(`%c[UPLOAD START] ID: ${taskId} | Type: ${type}`, "color: #00f; font-weight: bold;");
+
     try {
+      // 1. Upload File Storage
       const ext = file.name.split('.').pop();
       const path = `${type}/${taskId}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file);
-      if (upErr) throw upErr;
+      
+      if (upErr) throw new Error(`Upload Gagal: ${upErr.message}`);
+      console.log("[UPLOAD] File uploaded to storage.");
 
+      // 2. Siapkan Data Update DB
       let updateData: any = {};
       if (type === 'surat_tugas') {
           updateData = { surat_tugas_signed_url: path, status: 'On Progress', waktu_upload_surat_tugas: new Date().toISOString() };
@@ -163,11 +165,82 @@ export default function PKTest() {
           updateData = { hasil_litmas_url: path, status: 'Review', anev_notes: null, waktu_upload_laporan: new Date().toISOString() };
       }
 
-      await supabase.from('litmas').update(updateData).eq('id_litmas', taskId);
-      toast({ title: "Berhasil", description: "Dokumen berhasil diupload." });
+      // 3. Update DB
+      const { error: dbError } = await supabase.from('litmas').update(updateData).eq('id_litmas', taskId);
+      if (dbError) throw new Error(`Update DB Gagal: ${dbError.message}`);
+      console.log("[UPLOAD] Database status updated.");
+
+      // 4. TRIGGER NOTIFIKASI WA (LOGIC FIX)
+      if (type === 'hasil_litmas') {
+          console.log("[NOTIF] Preparing notification...");
+          
+          // Fetch Fresh Data untuk memastikan kita punya ID Anev yang benar
+          // @ts-ignore
+          const { data: freshTask, error: freshError } = await supabase
+            .from('litmas')
+            .select(`
+                *,
+                klien:klien!litmas_id_klien_fkey (nama_klien)
+            `)
+            .eq('id_litmas', taskId)
+            .single();
+
+          if (freshError) {
+             console.error("[NOTIF ERROR] Gagal fetch data fresh:", freshError);
+          } else {
+             console.log("[NOTIF] Fresh Data:", freshTask);
+
+             // DETEKSI KOLOM ID ANEV (Mendukung 'id_anev' atau 'assigned_anev_id')
+             // @ts-ignore
+             const targetAnevId = freshTask.id_anev || freshTask.assigned_anev_id;
+             
+             if (targetAnevId) {
+                  console.log(`[NOTIF] Sending WA to Anev ID: ${targetAnevId}`);
+                  
+                  const { data: funcData, error: funcError } = await supabase.functions.invoke('notify-anev', {
+                    body: {
+                      id_anev: targetAnevId,
+                      nama_pk: pkName || "PK",
+                      // @ts-ignore
+                      nama_klien: freshTask?.klien?.nama_klien || "Tanpa Nama",
+                      // @ts-ignore
+                      jenis_litmas: freshTask?.jenis_litmas || "Laporan Litmas"
+                    }
+                  });
+
+                  if (funcError) {
+                      console.error("[NOTIF FAILED] Edge Function Error:", funcError);
+                      toast({
+                          variant: "destructive",
+                          title: "Upload Berhasil, WA Gagal",
+                          description: "Dokumen tersimpan, tapi notifikasi WA gagal (Cek console)."
+                      });
+                  } else {
+                      console.log("[NOTIF SUCCESS] Response:", funcData);
+                      toast({
+                          title: "Sukses!",
+                          description: "Laporan diupload & Notifikasi WA terkirim.",
+                      });
+                  }
+             } else {
+                  console.warn("[NOTIF SKIP] Tidak ditemukan ID Anev (id_anev/assigned_anev_id null) pada task ini.");
+                  toast({ 
+                      title: "Berhasil", 
+                      description: "Laporan diupload (Anev belum ditunjuk, notifikasi dilewati).",
+                      variant: "default" 
+                  });
+             }
+          }
+      } else {
+          toast({ title: "Berhasil", description: "Surat Tugas berhasil diupload." });
+      }
+
+      // Refresh tabel
       fetchMyTasks(); 
+
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Gagal", description: e.message });
+      console.error("[CRITICAL ERROR]", e);
+      toast({ variant: "destructive", title: "Gagal Memproses", description: e.message });
     } finally {
       setUploadingId(null);
     }
@@ -226,7 +299,7 @@ export default function PKTest() {
                 tasks={filteredTasks} 
                 loading={loading}
                 onViewDetail={(task) => { setSelectedTask(task); setIsDetailOpen(true); }}
-                onUpload={handleUpload}
+                onUpload={handleUpload} 
                 onOpenRegister={openRegisterDialog}
             />
           </CardContent>
@@ -243,6 +316,7 @@ export default function PKTest() {
             isOpen={isDetailOpen} 
             onOpenChange={setIsDetailOpen} 
             task={selectedTask}
+            onRefresh={fetchMyTasks} 
         />
       </div>
     </TestPageLayout>
