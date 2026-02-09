@@ -6,7 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Import AnevSelector
 import { AnevSelector } from "./AnevSelector"; 
@@ -40,22 +39,22 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
   const [uploading, setUploading] = useState(false);
   const [fileLaporan, setFileLaporan] = useState<File | null>(null);
   const [selectedAnevId, setSelectedAnevId] = useState<string>("");
-  const [anevName, setAnevName] = useState<string>(""); // State untuk menyimpan nama Anev
+  const [anevName, setAnevName] = useState<string>(""); 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper untuk cek apakah Anev sudah ada
+  const existingAnevId = task?.assigned_anev_id || task?.id_anev;
+  const isAnevAssigned = !!existingAnevId;
 
   // --- EFFECT: AMBIL NAMA ANEV SAAT DIALOG DIBUKA ---
   useEffect(() => {
     const fetchAnevName = async () => {
-        // Reset dulu
         setAnevName("");
 
-        const anevId = task?.assigned_anev_id || task?.id_anev;
-        if (!anevId || !isOpen) return;
+        if (!existingAnevId || !isOpen) return;
 
         try {
-            // Query ke tabel 'users' untuk mendapatkan 'employee_id', lalu join ke 'employees'
-            // Asumsi: assigned_anev_id adalah UUID dari tabel auth.users/public.users
             const { data, error } = await supabase
                 .from('users')
                 .select(`
@@ -63,7 +62,7 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
                         nama
                     )
                 `)
-                .eq('id', anevId)
+                .eq('id', existingAnevId)
                 .single();
             
             if (error) {
@@ -85,7 +84,7 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
     };
 
     fetchAnevName();
-  }, [isOpen, task]);
+  }, [isOpen, task, existingAnevId]);
 
   if (!task) return null;
 
@@ -97,19 +96,23 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
   };
 
   const handleUploadLaporan = async () => {
-    // 1. Validasi
+    // 1. Validasi File
     if (!fileLaporan) {
       toast({ title: "File Kosong", description: "Mohon pilih file laporan hasil litmas (PDF/DOCX).", variant: "destructive" });
       return;
     }
-    if (!selectedAnevId) {
+
+    // 2. Tentukan ID Anev (Gunakan yang sudah ada ATAU yang baru dipilih)
+    const targetAnevId = isAnevAssigned ? existingAnevId : selectedAnevId;
+
+    if (!targetAnevId) {
       toast({ title: "Anev Belum Ditunjuk", description: "Wajib memilih Anev Verifikator sebelum mengirim.", variant: "destructive" });
       return;
     }
 
     setUploading(true);
     try {
-      // 2. Upload File ke Storage
+      // 3. Upload File ke Storage
       const fileExt = fileLaporan.name.split('.').pop();
       const fileName = `hasil_litmas/${task.id_litmas}_${Date.now()}.${fileExt}`;
       
@@ -119,13 +122,18 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
 
       if (uploadError) throw new Error(`Gagal upload file: ${uploadError.message}`);
 
-      // 3. Update Database
+      // 4. Update Database
+      // Jika Anev sudah ada (Revisi), jangan update kolom assigned_anev_id lagi (biar aman)
       const updatePayload: any = {
         status: 'Review', 
         hasil_litmas_url: fileName,
-        waktu_upload_laporan: new Date().toISOString(),
-        assigned_anev_id: selectedAnevId 
+        waktu_upload_laporan: new Date().toISOString()
       };
+
+      // Hanya masukkan assigned_anev_id jika ini penunjukan pertama kali
+      if (!isAnevAssigned) {
+        updatePayload.assigned_anev_id = targetAnevId;
+      }
 
       const { error: updateError } = await supabase
         .from('litmas')
@@ -134,40 +142,29 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
 
       if (updateError) throw new Error(`Gagal update database: ${updateError.message}`);
 
-      // --- 4. KIRIM NOTIFIKASI WA KE ANEV ---
+      // --- 5. KIRIM NOTIFIKASI WA KE ANEV ---
       console.log("Memicu Notifikasi WA...");
       try {
-          // Ambil Nama PK (Current User)
+          // Ambil Nama PK (Current User) untuk pesan WA
           const { data: { user } } = await supabase.auth.getUser();
           let currentPkName = "Petugas PK";
           
           if (user) {
             //@ts-ignore
-              const { data: pkData } = await supabase
-                  .from('petugas_pk')
-                  .select('nama')
-                  .eq('user_id', user.id)
-                  .single();
-              
+              const { data: pkData } = await supabase.from('petugas_pk').select('nama').eq('user_id', user.id).maybeSingle();
               if (pkData) {
                   currentPkName = pkData.nama;
               } else {
-                  // Fallback
-                  // @ts-ignore
-                  const { data: empData } = await supabase
-                      .from('users')
-                      .select('employees(nama)')
-                      .eq('id', user.id)
-                      .single();
-                  // @ts-ignore
+                  //@ts-ignore
+                  const { data: empData } = await supabase.from('users').select('employees(nama)').eq('id', user.id).maybeSingle();
+                  //@ts-ignore
                   if (empData?.employees?.nama) currentPkName = empData.employees.nama;
               }
           }
 
-          // Panggil Edge Function
           const { error: funcError } = await supabase.functions.invoke('notify-anev', {
               body: {
-                  id_anev: selectedAnevId,
+                  id_anev: targetAnevId, // Menggunakan ID yang sudah dipastikan di atas
                   nama_pk: currentPkName,
                   nama_klien: task?.klien?.nama_klien || "Tanpa Nama",
                   jenis_litmas: task?.jenis_litmas || "Laporan Litmas"
@@ -185,7 +182,9 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
           } else {
               toast({ 
                 title: "Sukses!", 
-                description: "Laporan diupload dan Anev telah dinotifikasi via WhatsApp." 
+                description: isAnevAssigned 
+                    ? "Laporan Revisi berhasil dikirim ke Anev." 
+                    : "Laporan dikirim dan Anev telah dinotifikasi." 
               });
           }
 
@@ -193,7 +192,7 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
           console.error("Error logic notifikasi:", notifErr);
       }
       
-      // 5. Reset & Close
+      // 6. Reset & Close
       setFileLaporan(null);
       setSelectedAnevId("");
       onOpenChange(false);
@@ -209,15 +208,12 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
 
   const { dateStr: sidangDate, timeStr: sidangTime } = formatSidangDate(task?.jadwal?.tanggal_sidang || task?.waktu_sidang_tpp);
   
-  // Cek apakah sudah ada anev terpilih (dari database atau dari state fetch)
-  const isAnevAssigned = !!(task?.assigned_anev_id || task?.id_anev);
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
             
             {/* HEADER */}
-            <DialogHeader className="px-6 py-4 border-b bg-slate-50/50">
+            <DialogHeader className="px-6 py-4 border-b bg-slate-50/50 shrink-0">
                 <div className="flex items-start justify-between mr-6">
                     <div className="space-y-1">
                         <DialogTitle className="flex items-center gap-2 text-xl">
@@ -234,34 +230,52 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
                 </div>
             </DialogHeader>
             
-            <ScrollArea className="flex-1 px-6 py-6">
+            {/* CONTENT (Scrollable) */}
+            <div className="flex-1 overflow-y-auto px-6 py-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     
-                    {/* KOLOM KIRI: INFO UTAMA & UPLOAD */}
+                    {/* KOLOM KIRI */}
                     <div className="lg:col-span-2 space-y-6">
                         
-                        {/* 1. SEKSI UPLOAD */}
+                        {/* 1. SEKSI UPLOAD (Visible on Progress / Revision) */}
                         {['On Progress', 'Revision'].includes(task?.status) && (
-                            <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl shadow-sm space-y-5 animate-in fade-in slide-in-from-top-2">
+                            <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl shadow-sm space-y-5">
                                 <div className="flex items-center gap-2 border-b border-blue-200 pb-3">
                                     <Upload className="w-5 h-5 text-blue-700"/>
-                                    <h4 className="font-bold text-blue-900">Upload Laporan Hasil Litmas</h4>
+                                    <h4 className="font-bold text-blue-900">
+                                        {isAnevAssigned ? "Upload Revisi Laporan" : "Upload Laporan Hasil Litmas"}
+                                    </h4>
                                 </div>
                                 
                                 <div className="grid md:grid-cols-2 gap-6">
-                                    {/* A. Selector Anev */}
-                                    <div className="space-y-2">
-                                        <Label className="text-blue-900">Pilih Anev Verifikator <span className="text-red-500">*</span></Label>
-                                        <div className="bg-white p-1 rounded-md border border-blue-200">
-                                            <AnevSelector 
-                                                selectedAnevId={selectedAnevId} 
-                                                onSelect={setSelectedAnevId} 
-                                            />
+                                    {/* A. Selector Anev (HANYA MUNCUL JIKA ANEV BELUM ADA) */}
+                                    {!isAnevAssigned && (
+                                        <div className="space-y-2">
+                                            <Label className="text-blue-900">Pilih Anev Verifikator <span className="text-red-500">*</span></Label>
+                                            <div className="bg-white p-1 rounded-md border border-blue-200">
+                                                <AnevSelector 
+                                                    selectedAnevId={selectedAnevId} 
+                                                    onSelect={setSelectedAnevId} 
+                                                />
+                                            </div>
+                                            <p className="text-[10px] text-blue-600/80">
+                                                *Sekali dipilih, Anev tidak dapat diubah.
+                                            </p>
                                         </div>
-                                        <p className="text-[10px] text-blue-600/80">
-                                            *Wajib memilih Anev agar laporan dapat diverifikasi.
-                                        </p>
-                                    </div>
+                                    )}
+
+                                    {/* Jika Anev sudah ada, tampilkan info statis (opsional, atau sembunyikan kolom ini) */}
+                                    {isAnevAssigned && (
+                                        <div className="space-y-2">
+                                            <Label className="text-blue-900">Anev Verifikator</Label>
+                                            <div className="bg-blue-100/50 p-2 rounded border border-blue-200 text-sm font-medium text-blue-800">
+                                                {anevName || "Memuat..."}
+                                            </div>
+                                            <p className="text-[10px] text-blue-600/80 italic">
+                                                Laporan revisi akan dikirim ke Anev ini.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {/* B. File Input */}
                                     <div className="space-y-2">
@@ -349,7 +363,6 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
                                 </div>
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Anev (Verifikator)</span> 
-                                    {/* PERUBAHAN DISINI: MENAMPILKAN NAMA ANEV */}
                                     <p className={`font-medium ${isAnevAssigned ? 'text-blue-700' : 'text-slate-400'}`}>
                                         {isAnevAssigned ? (anevName || "Memuat nama...") : "Belum Ditunjuk"}
                                     </p>
@@ -396,7 +409,7 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
                         </div>
                     </div>
 
-                    {/* KOLOM KANAN: TIMELINE & JADWAL */}
+                    {/* KOLOM KANAN */}
                     <div className="space-y-6">
                         
                         {/* A. WIDGET JADWAL */}
@@ -439,12 +452,10 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
                                   { date: task?.waktu_selesai, label: "Selesai", color: "bg-blue-600", text: "text-blue-700" }
                                 ].map((item, idx) => (
                                   <div key={idx} className="ml-8 relative group">
-                                      {/* Dot Indikator */}
                                       <div className={`absolute -left-[39px] w-5 h-5 rounded-full border-4 border-white shadow-sm transition-all duration-300
                                           ${item.date ? item.color : 'bg-slate-200 group-hover:bg-slate-300'}
                                       `}></div>
                                       
-                                      {/* Konten */}
                                       <div className={!item.date ? 'opacity-50 grayscale' : ''}>
                                           <p className={`text-xs font-bold ${item.text}`}>{item.label}</p>
                                           <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
@@ -458,10 +469,10 @@ export function PKDetailDialog({ isOpen, onOpenChange, task, onRefresh }: PKDeta
 
                     </div>
                 </div>
-            </ScrollArea>
+            </div>
 
             {/* FOOTER */}
-            <div className="p-4 border-t bg-slate-50 flex justify-end">
+            <div className="p-4 border-t bg-slate-50 flex justify-end shrink-0">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Tutup</Button>
             </div>
         </DialogContent>

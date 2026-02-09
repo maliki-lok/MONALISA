@@ -9,7 +9,7 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      // --- TABEL LAMA ---
+      // --- TABEL LAMA (USER & EMPLOYEE) ---
       employees: {
         Row: {
           agama: string | null
@@ -238,7 +238,7 @@ export type Database = {
         ]
       }
 
-      // --- TABEL BARU (OPERATOR REGISTRASI) ---
+      // --- TABEL DATA UTAMA (OPERATOR REGISTRASI) ---
       
       petugas_pk: {
         Row: {
@@ -319,28 +319,6 @@ export type Database = {
           kelurahan?: string | null
           kecamatan?: string | null
           nomor_telepon?: string | null
-        }
-        Relationships: []
-      }
-
-      upt: {
-        Row: {
-          id_upt: number
-          nama_upt: string | null
-          jenis_upt: string | null
-          alamat: string | null
-        }
-        Insert: {
-          id_upt?: number
-          nama_upt?: string | null
-          jenis_upt?: string | null
-          alamat?: string | null
-        }
-        Update: {
-          id_upt?: number
-          nama_upt?: string | null
-          jenis_upt?: string | null
-          alamat?: string | null
         }
         Relationships: []
       }
@@ -469,7 +447,7 @@ export type Database = {
             foreignKeyName: "litmas_id_upt_fkey"
             columns: ["id_upt"]
             isOneToOne: false
-            referencedRelation: "upt"
+            referencedRelation: "ref_upt" // Updated relation
             referencedColumns: ["id_upt"]
           },
           {
@@ -616,6 +594,181 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "litmas"
             referencedColumns: ["id_litmas"]
+          }
+        ]
+      }
+
+      // --- TABEL REFERENSI (BARU) ---
+
+      ref_agama: {
+        Row: {
+          id_agama: number
+          nama_agama: string
+        }
+        Insert: {
+          id_agama?: number
+          nama_agama: string
+        }
+        Update: {
+          id_agama?: number
+          nama_agama?: string
+        }
+        Relationships: []
+      }
+
+      ref_pendidikan: {
+        Row: {
+          id_pendidikan: number
+          tingkat: string
+        }
+        Insert: {
+          id_pendidikan?: number
+          tingkat: string
+        }
+        Update: {
+          id_pendidikan?: number
+          tingkat?: string
+        }
+        Relationships: []
+      }
+
+      ref_pekerjaan: {
+        Row: {
+          id_pekerjaan: number
+          nama_pekerjaan: string
+        }
+        Insert: {
+          id_pekerjaan?: number
+          nama_pekerjaan: string
+        }
+        Update: {
+          id_pekerjaan?: number
+          nama_pekerjaan?: string
+        }
+        Relationships: []
+      }
+
+      ref_hubungan: {
+        Row: {
+          id_hubungan: number
+          nama_hubungan: string
+        }
+        Insert: {
+          id_hubungan?: number
+          nama_hubungan: string
+        }
+        Update: {
+          id_hubungan?: number
+          nama_hubungan?: string
+        }
+        Relationships: []
+      }
+
+      ref_upt: {
+        Row: {
+          id_upt: number
+          nama_upt: string
+          jenis_instansi: string | null
+          alamat: string | null
+          kota_id: number | null
+        }
+        Insert: {
+          id_upt?: number
+          nama_upt: string
+          jenis_instansi?: string | null
+          alamat?: string | null
+          kota_id?: number | null
+        }
+        Update: {
+          id_upt?: number
+          nama_upt?: string
+          jenis_instansi?: string | null
+          alamat?: string | null
+          kota_id?: number | null
+        }
+        Relationships: []
+      }
+
+      ref_jenis_litmas: {
+        Row: {
+          id_jenis_litmas: number
+          jenis: string
+        }
+        Insert: {
+          id_jenis_litmas?: number
+          jenis: string
+        }
+        Update: {
+          id_jenis_litmas?: number
+          jenis?: string
+        }
+        Relationships: []
+      }
+
+      ref_bapas: {
+        Row: {
+          id_bapas: number
+          nama_bapas: string
+          wilayah_id: number | null
+        }
+        Insert: {
+          id_bapas?: number
+          nama_bapas: string
+          wilayah_id?: number | null
+        }
+        Update: {
+          id_bapas?: number
+          nama_bapas?: string
+          wilayah_id?: number | null
+        }
+        Relationships: []
+      }
+
+      ref_kecamatan: {
+        Row: {
+          id_kecamatan: number
+          nama_kecamatan: string
+          kota_id: number | null
+        }
+        Insert: {
+          id_kecamatan?: number
+          nama_kecamatan: string
+          kota_id?: number | null
+        }
+        Update: {
+          id_kecamatan?: number
+          nama_kecamatan?: string
+          kota_id?: number | null
+        }
+        Relationships: []
+      }
+
+      ref_kelurahan: {
+        Row: {
+          id_kelurahan: number
+          nama_kelurahan: string
+          kecamatan_id: number | null
+          kode_pos: string | null
+        }
+        Insert: {
+          id_kelurahan?: number
+          nama_kelurahan: string
+          kecamatan_id?: number | null
+          kode_pos?: string | null
+        }
+        Update: {
+          id_kelurahan?: number
+          nama_kelurahan?: string
+          kecamatan_id?: number | null
+          kode_pos?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ref_kelurahan_kecamatan_id_fkey"
+            columns: ["kecamatan_id"]
+            isOneToOne: false
+            referencedRelation: "ref_kecamatan"
+            referencedColumns: ["id_kecamatan"]
           }
         ]
       }

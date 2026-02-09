@@ -11,9 +11,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { PKStatsCards } from '@/components/pk/PKStatsCards';
 import { PKTaskTable } from '@/components/pk/PKTaskTable';
 import { PKRegisterDialog } from '@/components/pk/PKRegisterDialog';
-import { PKDetailDialog } from '@/components/pk/PKDetailDialog';
+import { PKDetailDialog } from '@/components/pk/PKDetailDialog'; // Pastikan import ini ada
 
-// --- 1. DEFINISI TIPE MANUAL (Update untuk mengakomodasi variasi nama kolom) ---
+// --- 1. DEFINISI TIPE MANUAL ---
 interface LitmasTaskData {
   id_litmas: number;
   created_at: string;
@@ -31,7 +31,6 @@ interface LitmasTaskData {
   waktu_selesai: string | null;
   asal_bapas: string | null;
   
-  // Variasi nama kolom ID Anev (salah satu pasti terisi)
   id_anev?: string | null; 
   assigned_anev_id?: string | null; 
 
@@ -50,7 +49,7 @@ interface LitmasTaskData {
   } | null;
 }
 
-// --- 2. FUNGSI FETCHER DI LUAR KOMPONEN ---
+// --- 2. FUNGSI FETCHER ---
 async function getLitmasTasksExternal(client: any, userId: string, isAdmin: boolean) {
     let pkId = null;
     
@@ -87,7 +86,6 @@ export default function PKTest() {
   const [tasks, setTasks] = useState<LitmasTaskData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -97,6 +95,7 @@ export default function PKTest() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [pkName, setPkName] = useState("");
 
   const isAdmin = hasRole('admin');
@@ -110,11 +109,6 @@ export default function PKTest() {
       const { data, error } = await getLitmasTasksExternal((supabase as any), user.id, isAdmin);
       if (error) throw error;
       
-      // Debug: Cek struktur data pertama untuk melihat nama kolom
-      if(data && data.length > 0) {
-          console.log("Sample Data Litmas (Cek kolom anev):", data[0]);
-      }
-
       if (data) setTasks(data as unknown as LitmasTaskData[]);
 
       if (!isAdmin) {
@@ -142,10 +136,10 @@ export default function PKTest() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);
 
-  // --- ACTIONS (UPLOAD & NOTIFY FIX) ---
+  // --- ACTIONS (UPLOAD SURAT TUGAS ONLY) ---
+  // Catatan: Upload Laporan sekarang dihandle via Dialog Detail
   const handleUpload = async (file: File, taskId: number, type: 'surat_tugas' | 'hasil_litmas') => {
     setUploadingId(taskId);
-    // DEBUG LOG 1: Pastikan fungsi terpanggil
     console.log(`%c[UPLOAD START] ID: ${taskId} | Type: ${type}`, "color: #00f; font-weight: bold;");
 
     try {
@@ -155,87 +149,24 @@ export default function PKTest() {
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file);
       
       if (upErr) throw new Error(`Upload Gagal: ${upErr.message}`);
-      console.log("[UPLOAD] File uploaded to storage.");
 
       // 2. Siapkan Data Update DB
       let updateData: any = {};
       if (type === 'surat_tugas') {
           updateData = { surat_tugas_signed_url: path, status: 'On Progress', waktu_upload_surat_tugas: new Date().toISOString() };
       } else {
+          // Fallback jika masih ada yang panggil lewat sini (meskipun logika utama pindah ke Dialog)
           updateData = { hasil_litmas_url: path, status: 'Review', anev_notes: null, waktu_upload_laporan: new Date().toISOString() };
       }
 
       // 3. Update DB
       const { error: dbError } = await supabase.from('litmas').update(updateData).eq('id_litmas', taskId);
       if (dbError) throw new Error(`Update DB Gagal: ${dbError.message}`);
-      console.log("[UPLOAD] Database status updated.");
 
-      // 4. TRIGGER NOTIFIKASI WA (LOGIC FIX)
-      if (type === 'hasil_litmas') {
-          console.log("[NOTIF] Preparing notification...");
-          
-          // Fetch Fresh Data untuk memastikan kita punya ID Anev yang benar
-          // @ts-ignore
-          const { data: freshTask, error: freshError } = await supabase
-            .from('litmas')
-            .select(`
-                *,
-                klien:klien!litmas_id_klien_fkey (nama_klien)
-            `)
-            .eq('id_litmas', taskId)
-            .single();
+      // --- LOGIKA NOTIFIKASI DIHAPUS DARI SINI ---
+      // (Sudah dipindah ke PKDetailDialog.tsx)
 
-          if (freshError) {
-             console.error("[NOTIF ERROR] Gagal fetch data fresh:", freshError);
-          } else {
-             console.log("[NOTIF] Fresh Data:", freshTask);
-
-             // DETEKSI KOLOM ID ANEV (Mendukung 'id_anev' atau 'assigned_anev_id')
-             // @ts-ignore
-             const targetAnevId = freshTask.id_anev || freshTask.assigned_anev_id;
-             
-             if (targetAnevId) {
-                  console.log(`[NOTIF] Sending WA to Anev ID: ${targetAnevId}`);
-                  
-                  const { data: funcData, error: funcError } = await supabase.functions.invoke('notify-anev', {
-                    body: {
-                      id_anev: targetAnevId,
-                      nama_pk: pkName || "PK",
-                      // @ts-ignore
-                      nama_klien: freshTask?.klien?.nama_klien || "Tanpa Nama",
-                      // @ts-ignore
-                      jenis_litmas: freshTask?.jenis_litmas || "Laporan Litmas"
-                    }
-                  });
-
-                  if (funcError) {
-                      console.error("[NOTIF FAILED] Edge Function Error:", funcError);
-                      toast({
-                          variant: "destructive",
-                          title: "Upload Berhasil, WA Gagal",
-                          description: "Dokumen tersimpan, tapi notifikasi WA gagal (Cek console)."
-                      });
-                  } else {
-                      console.log("[NOTIF SUCCESS] Response:", funcData);
-                      toast({
-                          title: "Sukses!",
-                          description: "Laporan diupload & Notifikasi WA terkirim.",
-                      });
-                  }
-             } else {
-                  console.warn("[NOTIF SKIP] Tidak ditemukan ID Anev (id_anev/assigned_anev_id null) pada task ini.");
-                  toast({ 
-                      title: "Berhasil", 
-                      description: "Laporan diupload (Anev belum ditunjuk, notifikasi dilewati).",
-                      variant: "default" 
-                  });
-             }
-          }
-      } else {
-          toast({ title: "Berhasil", description: "Surat Tugas berhasil diupload." });
-      }
-
-      // Refresh tabel
+      toast({ title: "Berhasil", description: type === 'surat_tugas' ? "Surat Tugas diupload" : "File berhasil diupload" });
       fetchMyTasks(); 
 
     } catch (e: any) {
@@ -264,7 +195,6 @@ export default function PKTest() {
       }
   };
 
-  // --- FILTER & STATS ---
   const filteredTasks = tasks.filter(t => 
     (t.klien?.nama_klien || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (t.klien?.nomor_register_lapas || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -312,6 +242,7 @@ export default function PKTest() {
             onSelectSchedule={setSelectedScheduleId}
             onConfirm={confirmRegisterTPP}
         />
+        {/* LOGIC NOTIFIKASI SEKARANG ADA DI DALAM COMPONENT INI */}
         <PKDetailDialog 
             isOpen={isDetailOpen} 
             onOpenChange={setIsDetailOpen} 

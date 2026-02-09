@@ -32,11 +32,88 @@ import { format, subDays } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 
 // --- IMPORTS DARI FILE LAIN ---
-import { JENIS_LITMAS, AGAMA_OPTIONS, PENDIDIKAN_OPTIONS } from '@/constants/registrasi';
 import { DurationInput } from '@/components/registrasi/DurationInput';
 import { SuggestionList } from '@/components/registrasi/SuggestionList';
 import { ClientSelector } from '@/components/registrasi/ClientSelector';
-import { PetugasPK, UPT, Klien } from '@/types/auth'; 
+import { PetugasPK, Klien } from '@/types/auth'; 
+import { Database } from '@/integrations/supabase/types';
+
+// --- TYPE DEFINITIONS FOR REFERENCES ---
+type RefAgama = Database['public']['Tables']['ref_agama']['Row'];
+type RefPendidikan = Database['public']['Tables']['ref_pendidikan']['Row'];
+type RefPekerjaan = Database['public']['Tables']['ref_pekerjaan']['Row'];
+type RefHubungan = Database['public']['Tables']['ref_hubungan']['Row'];
+type RefUpt = Database['public']['Tables']['ref_upt']['Row'];
+type RefJenisLitmas = Database['public']['Tables']['ref_jenis_litmas']['Row'];
+type RefBapas = Database['public']['Tables']['ref_bapas']['Row'];
+
+interface RefKelurahanExtended { 
+  id_kelurahan: number; 
+  nama_kelurahan: string; 
+  kecamatan_id: number | null;
+  ref_kecamatan: {
+      nama_kecamatan: string;
+  } | null;
+}
+
+// --- REUSABLE COMPONENT: SEARCHABLE COMBOBOX ---
+interface SearchableSelectProps {
+  options: any[];
+  value: string | undefined;
+  onSelect: (val: string) => void;
+  labelKey: string;
+  valueKey: string;
+  placeholder: string;
+  searchPlaceholder: string;
+  name: string;
+}
+
+const SearchableSelect = ({ 
+  options, value, onSelect, labelKey, valueKey, placeholder, searchPlaceholder, name 
+}: SearchableSelectProps) => {
+  const [open, setOpen] = useState(false);
+
+  // Cari label dari value yang terpilih untuk ditampilkan di trigger
+  const selectedLabel = options.find((item) => String(item[valueKey]) === value)?.[labelKey];
+
+  return (
+    <div className="grid gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+            {value && selectedLabel ? selectedLabel : <span className="text-muted-foreground">{placeholder}</span>}
+            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0">
+          <Command>
+            <CommandInput placeholder={searchPlaceholder} />
+            <CommandList>
+              <CommandEmpty>Tidak ditemukan.</CommandEmpty>
+              <CommandGroup className="max-h-64 overflow-y-auto">
+                {options.map((item) => (
+                  <CommandItem
+                    key={item[valueKey]}
+                    value={item[labelKey]} // Search by label
+                    onSelect={() => {
+                      onSelect(String(item[valueKey]));
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === String(item[valueKey]) ? "opacity-100" : "opacity-0")} />
+                    {item[labelKey]}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {/* Hidden input agar FormData bisa menangkap nilai saat submit */}
+      <input type="hidden" name={name} value={value || ""} />
+    </div>
+  );
+};
 
 export default function OperatorRegistrasiTest() {
   const { toast } = useToast();
@@ -50,9 +127,18 @@ export default function OperatorRegistrasiTest() {
   const [activeTab, setActiveTab] = useState("klien_perkara");
   const [loading, setLoading] = useState(false);
   
-  // Referensi & Data
+  // --- STATE DATA REFERENSI ---
   const [listPK, setListPK] = useState<PetugasPK[]>([]);
-  const [listUPT, setListUPT] = useState<UPT[]>([]);
+  const [refAgama, setRefAgama] = useState<RefAgama[]>([]);
+  const [refPendidikan, setRefPendidikan] = useState<RefPendidikan[]>([]);
+  const [refPekerjaan, setRefPekerjaan] = useState<RefPekerjaan[]>([]);
+  const [refHubungan, setRefHubungan] = useState<RefHubungan[]>([]);
+  const [refUpt, setRefUpt] = useState<RefUpt[]>([]);
+  const [refJenisLitmas, setRefJenisLitmas] = useState<RefJenisLitmas[]>([]);
+  const [refBapas, setRefBapas] = useState<RefBapas[]>([]);
+  const [refKelurahan, setRefKelurahan] = useState<RefKelurahanExtended[]>([]);
+
+  // State Data Operasional
   const [listKlien, setListKlien] = useState<Klien[]>([]);
   const [dataLitmas, setDataLitmas] = useState<any[]>([]);
   const [dataKlienFull, setDataKlienFull] = useState<any[]>([]);
@@ -62,6 +148,27 @@ export default function OperatorRegistrasiTest() {
   const [selectedPkId, setSelectedPkId] = useState<string | null>(null);
   const [originalPkId, setOriginalPkId] = useState<string | null>(null);
   const [openPkCombo, setOpenPkCombo] = useState(false);
+
+  // --- UI STATE UNTUK COMBOBOX (Form Values) ---
+  // Klien
+  const [selectedAgama, setSelectedAgama] = useState<string>("");
+  const [selectedPendidikan, setSelectedPendidikan] = useState<string>("");
+  const [selectedPekerjaan, setSelectedPekerjaan] = useState<string>("");
+  const [selectedKelurahan, setSelectedKelurahan] = useState<string>("");
+  const [manualKecamatan, setManualKecamatan] = useState<string>("");
+  
+  // Penjamin
+  const [selectedHubungan, setSelectedHubungan] = useState<string>("");
+  const [selectedAgamaPenjamin, setSelectedAgamaPenjamin] = useState<string>("");
+  const [selectedPendidikanPenjamin, setSelectedPendidikanPenjamin] = useState<string>("");
+  const [selectedPekerjaanPenjamin, setSelectedPekerjaanPenjamin] = useState<string>("");
+  const [selectedKelurahanPenjamin, setSelectedKelurahanPenjamin] = useState<string>(""); 
+  const [manualKecamatanPenjamin, setManualKecamatanPenjamin] = useState<string>("");
+  
+  // Litmas
+  const [selectedJenisLitmas, setSelectedJenisLitmas] = useState<string>("");
+  const [selectedUpt, setSelectedUpt] = useState<string>("");
+  const [selectedBapas, setSelectedBapas] = useState<string>("Bapas Kelas I Jakarta Barat"); 
 
   // Edit Mode States
   const [editingKlien, setEditingKlien] = useState<any | null>(null);
@@ -78,11 +185,8 @@ export default function OperatorRegistrasiTest() {
   // UI States
   const [openDetail, setOpenDetail] = useState(false);
   const [detailData, setDetailData] = useState<any | null>(null);
-  
-  // STATE BARU: Detail Monitoring Litmas
   const [openLitmasDetail, setOpenLitmasDetail] = useState(false);
   const [selectedLitmasDetail, setSelectedLitmasDetail] = useState<any>(null);
-
   const [openHistory, setOpenHistory] = useState(false);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -109,7 +213,6 @@ export default function OperatorRegistrasiTest() {
 
   // --- LOGIC FUNCTIONS ---
 
-  // HELPER: Format Tanggal
   const formatDateTime = (isoString: string | null) => {
     if (!isoString) return '-';
     return new Date(isoString).toLocaleDateString('id-ID', {
@@ -118,7 +221,28 @@ export default function OperatorRegistrasiTest() {
     });
   };
 
-  // 1. REFRESH DATA EDIT (Agar data form selalu fresh setelah save)
+  // Logic Memilih Kelurahan -> Otomatis Isi Kecamatan (KLIEN)
+  const handleSelectKelurahan = (namaKelurahan: string) => {
+    setSelectedKelurahan(namaKelurahan);
+    const selected = refKelurahan.find(k => k.nama_kelurahan === namaKelurahan);
+    if (selected) {
+      setManualKecamatan(selected.ref_kecamatan?.nama_kecamatan || "");
+    } else {
+      setManualKecamatan(""); 
+    }
+  };
+
+  // Logic Memilih Kelurahan -> Otomatis Isi Kecamatan (PENJAMIN)
+  const handleSelectKelurahanPenjamin = (namaKelurahan: string) => {
+    setSelectedKelurahanPenjamin(namaKelurahan);
+    const selected = refKelurahan.find(k => k.nama_kelurahan === namaKelurahan);
+    if (selected) {
+      setManualKecamatanPenjamin(selected.ref_kecamatan?.nama_kecamatan || "");
+    } else {
+      setManualKecamatanPenjamin(""); 
+    }
+  };
+
   const refreshEditData = async (idKlien: number) => {
     try {
         const { data, error } = await supabase.from('klien').select(`*, penjamin (*), litmas:litmas!fk_litmas_klien (*, perkara (*))`).eq('id_klien', idKlien).single();
@@ -167,8 +291,25 @@ export default function OperatorRegistrasiTest() {
   const fetchReferences = useCallback(async () => {
     const { data: pkData } = await supabase.from('petugas_pk').select('*');
     if (pkData) setListPK(pkData as unknown as PetugasPK[]);
-    const { data: uptData } = await supabase.from('upt').select('*');
-    if (uptData) setListUPT(uptData as unknown as UPT[]);
+    const { data: agama } = await supabase.from('ref_agama').select('*');
+    if (agama) setRefAgama(agama);
+    const { data: pend } = await supabase.from('ref_pendidikan').select('*');
+    if (pend) setRefPendidikan(pend);
+    const { data: pek } = await supabase.from('ref_pekerjaan').select('*');
+    if (pek) setRefPekerjaan(pek);
+    const { data: hub } = await supabase.from('ref_hubungan').select('*');
+    if (hub) setRefHubungan(hub);
+    const { data: upt } = await supabase.from('ref_upt').select('*');
+    if (upt) setRefUpt(upt);
+    const { data: jl } = await supabase.from('ref_jenis_litmas').select('*');
+    if (jl) setRefJenisLitmas(jl);
+    const { data: bapas } = await supabase.from('ref_bapas').select('*');
+    if (bapas) setRefBapas(bapas);
+    const { data: kel } = await supabase.from('ref_kelurahan')
+        .select(`id_kelurahan, nama_kelurahan, kecamatan_id, ref_kecamatan ( nama_kecamatan )`)
+        .limit(2000); 
+    if (kel) setRefKelurahan(kel as unknown as RefKelurahanExtended[]);
+
     let queryKlien = supabase.from('klien').select('id_klien, nama_klien, nomor_register_lapas').order('id_klien', { ascending: false });
     if (isOpAnak) queryKlien = queryKlien.eq('kategori_usia', 'Anak');
     else if (isOpDewasa) queryKlien = queryKlien.eq('kategori_usia', 'Dewasa');
@@ -184,7 +325,7 @@ export default function OperatorRegistrasiTest() {
       else if (isOpDewasa) qK = qK.eq('kategori_usia', 'Dewasa');
       const { data: kData } = await qK;
       setDataKlienFull(kData || []);
-      const { data: lData } = await supabase.from('litmas').select(`*, klien:klien!fk_litmas_klien (nama_klien), petugas_pk:petugas_pk!fk_litmas_pk (nama, nip)`).order('id_litmas', { ascending: false }).limit(20);
+      const { data: lData } = await supabase.from('litmas').select(`*, klien:klien!fk_litmas_klien (nama_klien), petugas_pk:petugas_pk!fk_litmas_pk (nama, nip), ref_upt(nama_upt)`).order('id_litmas', { ascending: false }).limit(20);
       setDataLitmas(lData || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   }, [isOpAnak, isOpDewasa]);
@@ -212,13 +353,51 @@ export default function OperatorRegistrasiTest() {
         if (error) throw error;
         const safeData = data as any;
         setEditingKlien(safeData);
-        setEditingPenjamin(safeData.penjamin?.[0] || null);
+        
+        // --- Populate Klien States ---
+        setSelectedAgama(safeData.agama || "");
+        setSelectedPendidikan(safeData.pendidikan || "");
+        setSelectedPekerjaan(safeData.pekerjaan || "");
+        if (safeData.kelurahan) handleSelectKelurahan(safeData.kelurahan);
+        else { setSelectedKelurahan(""); setManualKecamatan(""); }
+        
+        // --- Populate Penjamin States ---
+        const pjn = safeData.penjamin?.[0] || null;
+        setEditingPenjamin(pjn);
+        if (pjn) {
+            setSelectedHubungan(pjn.hubungan_klien || "");
+            setSelectedAgamaPenjamin(pjn.agama || "");
+            setSelectedPendidikanPenjamin(pjn.pendidikan || "");
+            setSelectedPekerjaanPenjamin(pjn.pekerjaan || "");
+            if (pjn.kelurahan) handleSelectKelurahanPenjamin(pjn.kelurahan);
+            else { setSelectedKelurahanPenjamin(""); setManualKecamatanPenjamin(""); }
+        } else {
+            setSelectedHubungan(""); setSelectedAgamaPenjamin(""); setSelectedPendidikanPenjamin(""); setSelectedPekerjaanPenjamin("");
+            setSelectedKelurahanPenjamin(""); setManualKecamatanPenjamin("");
+        }
+
+        // --- Populate Litmas States ---
         const firstLitmas = safeData.litmas?.[0] || null;
         setEditingLitmas(firstLitmas);
         setPerkaraList(firstLitmas?.perkara || []);
+        if (firstLitmas) {
+            setSelectedPkId(firstLitmas.nama_pk || null); 
+            setOriginalPkId(firstLitmas.nama_pk || null);
+            setSelectedJenisLitmas(firstLitmas.jenis_litmas || "");
+            setSelectedUpt(firstLitmas.id_upt ? String(firstLitmas.id_upt) : "");
+            setSelectedBapas(firstLitmas.asal_bapas || "");
+        } else {
+            setSelectedPkId(null); setOriginalPkId(null);
+            setSelectedJenisLitmas(""); setSelectedUpt(""); setSelectedBapas("");
+        }
+
         setSelectedClientId(safeData.id_klien);
-        if (firstLitmas) { setSelectedPkId(firstLitmas.nama_pk || null); setOriginalPkId(firstLitmas.nama_pk || null); } 
-        else { setSelectedPkId(null); setOriginalPkId(null); }
+        
+        if(safeData.tanggal_lahir) {
+             setTglLahir(safeData.tanggal_lahir);
+             calculateAgeAndCategory(safeData.tanggal_lahir);
+        }
+
         setActiveTab("klien_perkara");
         toast({ title: "Mode Edit Aktif", description: `Mengedit data: ${safeData.nama_klien}` });
     } catch (error: any) { toast({ variant: "destructive", title: "Gagal load data", description: error.message }); } 
@@ -229,7 +408,15 @@ export default function OperatorRegistrasiTest() {
     setEditingKlien(null); setEditingPenjamin(null); setEditingLitmas(null);
     setPerkaraList([]); setSelectedClientId(null); setSelectedPkId(null); setOriginalPkId(null);
     setMatchesKlien([]); setMatchesPenjamin([]); setActiveInput(null); setFileSuratPermintaan(null);
+    setTglLahir(""); setHitungUsia(""); setHitungKategori("");
     setTempPerkara({ pasal: '', tindak_pidana: '', nomor_putusan: '', vonis_pidana: '', denda: '', subsider_pidana: '', tanggal_mulai_ditahan: '', tanggal_ekspirasi: '' });
+    
+    // Reset Selection States
+    setSelectedAgama(""); setSelectedPendidikan(""); setSelectedPekerjaan("");
+    setSelectedKelurahan(""); setManualKecamatan("");
+    setSelectedHubungan(""); setSelectedAgamaPenjamin(""); setSelectedPendidikanPenjamin(""); setSelectedPekerjaanPenjamin("");
+    setSelectedKelurahanPenjamin(""); setManualKecamatanPenjamin("");
+    setSelectedJenisLitmas(""); setSelectedUpt(""); setSelectedBapas("Bapas Kelas I Jakarta Barat");
   };
 
   const handleCancelButton = (showToast = true) => { resetFormState(); if (showToast) toast({ title: "Edit Dibatalkan", description: "Form direset." }); };
@@ -281,10 +468,9 @@ export default function OperatorRegistrasiTest() {
                 tempat_lahir: formData.get('tempat_lahir') as string, tanggal_lahir: (formData.get('tanggal_lahir') as string),
                 usia: Number(formData.get('usia')), kategori_usia: kategoriFix, pekerjaan: formData.get('pekerjaan') as string,
                 minat_bakat: formData.get('minat_bakat') as string, alamat: formData.get('alamat') as string,
-                kelurahan: formData.get('kelurahan') as string, kecamatan: formData.get('kecamatan') as string, nomor_telepon: formData.get('nomor_telepon') as string,
+                kelurahan: formData.get('kelurahan') as string, kecamatan: manualKecamatan, nomor_telepon: formData.get('nomor_telepon') as string,
               };
 
-              // --- LOGIC UPLOAD DI TAB KLIEN (MODE EDIT) ---
               let uploadedFileUrl = null;
               if (fileSuratPermintaan && editingLitmas) {
                   setIsUploading(true);
@@ -308,8 +494,6 @@ export default function OperatorRegistrasiTest() {
                       }));
                       await supabase.from('perkara').insert(perkaraPayloads);
                   }
-                  
-                  // REFRESH DATA EDIT
                   await refreshEditData(editingKlien.id_klien);
                   toast({ title: "Berhasil", description: "Perubahan data Klien & File disimpan." });
                   setActiveTab("penjamin");
@@ -327,13 +511,13 @@ export default function OperatorRegistrasiTest() {
                   id_klien: selectedClientId, nama_penjamin: formData.get('nama_penjamin') as string, nik_penjamin: formData.get('nik_penjamin') as string,
                   hubungan_klien: formData.get('hubungan_klien') as string, agama: formData.get('agama') as string, tempat_lahir: formData.get('tempat_lahir') as string,
                   tanggal_lahir: (formData.get('tanggal_lahir') as string) || null, usia: Number(formData.get('usia')), pendidikan: formData.get('pendidikan') as string,
-                  pekerjaan: formData.get('pekerjaan') as string, alamat: formData.get('alamat') as string, kelurahan: formData.get('kelurahan') as string,
-                  kecamatan: formData.get('kecamatan') as string, nomor_telepon: formData.get('nomor_telepon') as string,
+                  pekerjaan: formData.get('pekerjaan') as string, alamat: formData.get('alamat') as string, 
+                  kelurahan: formData.get('kelurahan') as string, kecamatan: manualKecamatanPenjamin, 
+                  nomor_telepon: formData.get('nomor_telepon') as string,
               };
               
               if (editingPenjamin) {
                   await supabase.from('penjamin').update(dataPenjamin).eq('id_klien', selectedClientId);
-                  // Refresh agar data penjamin di state update saat edit
                   if (editingKlien) await refreshEditData(editingKlien.id_klien);
               } else {
                   const {count} = await supabase.from('penjamin').select('*', {count: 'exact', head:true}).eq('id_klien', selectedClientId);
@@ -345,7 +529,6 @@ export default function OperatorRegistrasiTest() {
               setActiveTab("litmas");
           } else if (type === 'litmas') {
               let uploadedFileUrl = null;
-              // Upload hanya jika ada file (di mode insert atau update litmas)
               if (fileSuratPermintaan) {
                   setIsUploading(true);
                   const namaKlien = listKlien.find(k => k.id_klien === selectedClientId)?.nama_klien || "klien";
@@ -488,7 +671,6 @@ export default function OperatorRegistrasiTest() {
                       <div className="mt-2 flex justify-center rounded-lg border-2 border-dashed border-slate-300 px-6 py-6 hover:bg-slate-50 hover:border-blue-400 transition-all relative cursor-pointer group">
                         
                         <div className="text-center w-full">
-                          {/* KONDISI 1: FILE BARU DIPILIH */}
                           {fileSuratPermintaan ? (
                             <div className="flex flex-col items-center text-green-600 animate-in fade-in zoom-in-95">
                               <FileText className="mx-auto h-12 w-12" />
@@ -496,7 +678,6 @@ export default function OperatorRegistrasiTest() {
                               <span className="text-xs text-slate-500 bg-green-50 px-2 py-1 rounded-full mt-1">Siap diupload (Klik Simpan)</span>
                             </div>
                           ) 
-                          /* KONDISI 2: FILE SUDAH ADA DI DATABASE (MODE EDIT) */
                           : (editingLitmas && editingLitmas.file_surat_permintaan_url) ? (
                             <div className="flex flex-col items-center justify-center p-2 rounded-md bg-blue-50/50 border border-blue-100">
                                 <FileText className="h-10 w-10 text-blue-600 mb-2" />
@@ -512,7 +693,6 @@ export default function OperatorRegistrasiTest() {
                                 <span className="text-[10px] text-slate-400 mt-2 italic">Klik area kotak ini untuk mengganti file</span>
                             </div>
                           ) 
-                          /* KONDISI 3: BELUM ADA FILE */
                           : (
                             <div className="flex flex-col items-center text-slate-500 group-hover:text-blue-600 transition-colors">
                               <CloudUpload className="mx-auto h-12 w-12 mb-2" />
@@ -522,7 +702,6 @@ export default function OperatorRegistrasiTest() {
                           )}
                         </div>
 
-                        {/* INPUT FILE HIDDEN - SELALU AKTIF */}
                         <Input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept=".pdf,.jpg,.jpeg,.png"
                           onChange={(e) => { if (e.target.files && e.target.files[0]) { setFileSuratPermintaan(e.target.files[0]); toast({ title: "File Dipilih", description: e.target.files[0].name }); } }}
                         />
@@ -568,9 +747,17 @@ export default function OperatorRegistrasiTest() {
                         <div className="grid gap-2"><Label>No. Register Lapas</Label><Input name="nomor_register_lapas" defaultValue={editingKlien?.nomor_register_lapas || ''} required /></div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="grid gap-2"><Label>Jenis Kelamin</Label><Select name="jenis_kelamin" required defaultValue={editingKlien?.jenis_kelamin || undefined}><SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
-                          <div className="grid gap-2"><Label>Agama</Label><Select name="agama" defaultValue={editingKlien?.agama || undefined}><SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger><SelectContent>{AGAMA_OPTIONS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent></Select></div>
+                          {/* REF AGAMA */}
+                          <div className="grid gap-2">
+                            <Label>Agama (ref_agama)</Label>
+                            <SearchableSelect options={refAgama} value={selectedAgama} onSelect={setSelectedAgama} labelKey="nama_agama" valueKey="nama_agama" placeholder="Pilih Agama..." searchPlaceholder="Cari agama..." name="agama" />
+                          </div>
                         </div>
-                        <div className="grid gap-2"><Label>Pendidikan Terakhir</Label><Select name="pendidikan" defaultValue={editingKlien?.pendidikan || undefined}><SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger><SelectContent>{PENDIDIKAN_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
+                        {/* REF PENDIDIKAN */}
+                        <div className="grid gap-2">
+                            <Label>Pendidikan (ref_pendidikan)</Label>
+                            <SearchableSelect options={refPendidikan} value={selectedPendidikan} onSelect={setSelectedPendidikan} labelKey="tingkat" valueKey="tingkat" placeholder="Pilih Pendidikan..." searchPlaceholder="Cari pendidikan..." name="pendidikan" />
+                        </div>
                       </div>
 
                       <div className="space-y-4">
@@ -586,7 +773,12 @@ export default function OperatorRegistrasiTest() {
                           <div className="grid gap-1"><Label className="text-xs text-slate-500">Usia</Label><Input name="usia" value={hitungUsia} readOnly className="bg-white" /></div>
                           <div className="grid gap-1"><Label className="text-xs text-slate-500">Kategori</Label><Input name="kategori_usia" value={isOpAnak ? 'Anak' : (isOpDewasa ? 'Dewasa' : hitungKategori)} readOnly className="bg-white font-bold" /></div>
                         </div>
-                        <div className="grid gap-2"><Label>Pekerjaan</Label><Input name="pekerjaan" defaultValue={editingKlien?.pekerjaan || ''} /></div>
+                        
+                        {/* REF PEKERJAAN */}
+                        <div className="grid gap-2">
+                            <Label>Pekerjaan (ref_pekerjaan)</Label>
+                            <SearchableSelect options={refPekerjaan} value={selectedPekerjaan} onSelect={setSelectedPekerjaan} labelKey="nama_pekerjaan" valueKey="nama_pekerjaan" placeholder="Pilih Pekerjaan..." searchPlaceholder="Cari pekerjaan..." name="pekerjaan" />
+                        </div>
                         <div className="grid gap-2"><Label>Minat / Bakat</Label><Input name="minat_bakat" defaultValue={editingKlien?.minat_bakat || ''} /></div>
                       </div>
                     </div>
@@ -596,8 +788,26 @@ export default function OperatorRegistrasiTest() {
                       <div className="grid gap-2"><Label>Alamat Lengkap</Label><Textarea name="alamat" defaultValue={editingKlien?.alamat || ''} className="h-24" /></div>
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2"><Label>Kelurahan</Label><Input name="kelurahan" defaultValue={editingKlien?.kelurahan || ''} /></div>
-                          <div className="grid gap-2"><Label>Kecamatan</Label><Input name="kecamatan" defaultValue={editingKlien?.kecamatan || ''} /></div>
+                          {/* REF KELURAHAN (COMBOBOX) */}
+                          <div className="grid gap-2">
+                             <Label>Kelurahan (ref_kelurahan)</Label>
+                             <SearchableSelect 
+                                options={refKelurahan} 
+                                value={selectedKelurahan} 
+                                onSelect={handleSelectKelurahan} 
+                                labelKey="nama_kelurahan" 
+                                valueKey="nama_kelurahan" 
+                                placeholder="Pilih Kelurahan..." 
+                                searchPlaceholder="Cari kelurahan..." 
+                                name="kelurahan" 
+                             />
+                          </div>
+
+                          {/* KECAMATAN AUTO-FILL */}
+                          <div className="grid gap-2">
+                              <Label>Kecamatan (Otomatis)</Label>
+                              <Input name="kecamatan" value={manualKecamatan} readOnly className="bg-slate-100 font-medium text-slate-700" placeholder="Pilih kelurahan dulu..." />
+                          </div>
                         </div>
                         <div className="grid gap-2"><Label>Nomor Telepon</Label><Input name="nomor_telepon" defaultValue={editingKlien?.nomor_telepon || ''} /></div>
                       </div>
@@ -680,17 +890,50 @@ export default function OperatorRegistrasiTest() {
                           <SuggestionList matches={matchesPenjamin} isVisible={activeInput === 'nik_penjamin'} labelField="nik_penjamin" subLabelField="nama_penjamin" onSelect={(item) => { toast({ title: "Info", description: `NIK ${item.nik_penjamin} sudah terdaftar.` }); setMatchesPenjamin([]); }} />
                         </div>
                       </div>
-                      <div className="grid gap-2"><Label>Hubungan</Label><Select name="hubungan_klien" defaultValue={editingPenjamin?.hubungan_klien || undefined} required><SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger><SelectContent><SelectItem value="orang_tua">Orang Tua</SelectItem><SelectItem value="istri_suami">Istri / Suami</SelectItem><SelectItem value="kakak_adik">Kakak / Adik</SelectItem><SelectItem value="lainnya">Lainnya</SelectItem></SelectContent></Select></div>
-                      <div className="grid gap-2"><Label>Agama</Label><Select name="agama" defaultValue={editingPenjamin?.agama || undefined}><SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger><SelectContent>{AGAMA_OPTIONS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent></Select></div>
+                      {/* REF HUBUNGAN */}
+                      <div className="grid gap-2">
+                          <Label>Hubungan (ref_hubungan)</Label>
+                          <SearchableSelect options={refHubungan} value={selectedHubungan} onSelect={setSelectedHubungan} labelKey="nama_hubungan" valueKey="nama_hubungan" placeholder="Pilih Hubungan..." searchPlaceholder="Cari hubungan..." name="hubungan_klien" />
+                      </div>
+                      {/* REF AGAMA */}
+                      <div className="grid gap-2">
+                          <Label>Agama (ref_agama)</Label>
+                          <SearchableSelect options={refAgama} value={selectedAgamaPenjamin} onSelect={setSelectedAgamaPenjamin} labelKey="nama_agama" valueKey="nama_agama" placeholder="Pilih Agama..." searchPlaceholder="Cari agama..." name="agama" />
+                      </div>
                       <div className="grid gap-2"><Label>Tempat Lahir</Label><Input name="tempat_lahir" defaultValue={editingPenjamin?.tempat_lahir || ''} /></div>
                       <div className="grid gap-2"><Label>Tanggal Lahir</Label><Input name="tanggal_lahir" type="date" defaultValue={editingPenjamin?.tanggal_lahir || ''} /></div>
                       <div className="grid gap-2"><Label>Usia</Label><Input name="usia" type="number" className="w-24" defaultValue={editingPenjamin?.usia || ''} /></div>
-                      <div className="grid gap-2"><Label>Pendidikan</Label><Select name="pendidikan" defaultValue={editingPenjamin?.pendidikan || undefined}><SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger><SelectContent>{PENDIDIKAN_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
-                      <div className="grid gap-2"><Label>Pekerjaan</Label><Input name="pekerjaan" defaultValue={editingPenjamin?.pekerjaan || ''} /></div>
+                      {/* REF PENDIDIKAN */}
+                      <div className="grid gap-2">
+                          <Label>Pendidikan (ref_pendidikan)</Label>
+                          <SearchableSelect options={refPendidikan} value={selectedPendidikanPenjamin} onSelect={setSelectedPendidikanPenjamin} labelKey="tingkat" valueKey="tingkat" placeholder="Pilih Pendidikan..." searchPlaceholder="Cari pendidikan..." name="pendidikan" />
+                      </div>
+                      {/* REF PEKERJAAN */}
+                      <div className="grid gap-2">
+                          <Label>Pekerjaan (ref_pekerjaan)</Label>
+                          <SearchableSelect options={refPekerjaan} value={selectedPekerjaanPenjamin} onSelect={setSelectedPekerjaanPenjamin} labelKey="nama_pekerjaan" valueKey="nama_pekerjaan" placeholder="Pilih Pekerjaan..." searchPlaceholder="Cari pekerjaan..." name="pekerjaan" />
+                      </div>
                       <div className="grid gap-2"><Label>No. Telepon</Label><Input name="nomor_telepon" type="tel" defaultValue={editingPenjamin?.nomor_telepon || ''} /></div>
                       <div className="grid gap-2 col-span-2"><Label>Alamat</Label><Textarea name="alamat" defaultValue={editingPenjamin?.alamat || ''} /></div>
-                      <div className="grid gap-2"><Label>Kelurahan</Label><Input name="kelurahan" defaultValue={editingPenjamin?.kelurahan || ''} /></div>
-                      <div className="grid gap-2"><Label>Kecamatan</Label><Input name="kecamatan" defaultValue={editingPenjamin?.kecamatan || ''} /></div>
+                      
+                      {/* Penjamin Kelurahan & Kecamatan: SEARCHABLE & AUTO-FILL */}
+                      <div className="grid gap-2">
+                          <Label>Kelurahan (ref_kelurahan)</Label>
+                          <SearchableSelect 
+                            options={refKelurahan} 
+                            value={selectedKelurahanPenjamin} 
+                            onSelect={handleSelectKelurahanPenjamin} 
+                            labelKey="nama_kelurahan" 
+                            valueKey="nama_kelurahan" 
+                            placeholder="Pilih Kelurahan..." 
+                            searchPlaceholder="Cari kelurahan..." 
+                            name="kelurahan" 
+                          />
+                      </div>
+                      <div className="grid gap-2">
+                          <Label>Kecamatan (Otomatis)</Label>
+                          <Input name="kecamatan" value={manualKecamatanPenjamin} readOnly className="bg-slate-100 font-medium text-slate-700" placeholder="Pilih kelurahan dulu..." />
+                      </div>
                     </div>
                     <div className="flex justify-end pt-4"><Button type="submit" className="bg-green-600 hover:bg-green-700">{loading ? <Loader2 className="animate-spin"/> : "Simpan Penjamin"}</Button></div>
                   </div>
@@ -708,10 +951,22 @@ export default function OperatorRegistrasiTest() {
                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-200"><ClientSelector listKlien={listKlien} selectedClientId={selectedClientId} setSelectedClientId={setSelectedClientId} editingKlien={editingKlien} handleCancelButton={handleCancelButton} loading={loading} userRoleCategory={userRoleCategory} /></div>
                   <div className={cn("space-y-6", !selectedClientId && "opacity-50 pointer-events-none")}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="grid gap-2"><Label>Jenis Litmas</Label><Select name="jenis_litmas" defaultValue={editingLitmas?.jenis_litmas || undefined} required><SelectTrigger><SelectValue placeholder="Pilih Jenis..." /></SelectTrigger><SelectContent>{JENIS_LITMAS.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}</SelectContent></Select></div>
-                      <div className="grid gap-2"><Label>Asal UPT</Label><Select name="id_upt" defaultValue={editingLitmas?.id_upt ? String(editingLitmas.id_upt) : undefined}><SelectTrigger><SelectValue placeholder="Pilih UPT..." /></SelectTrigger><SelectContent>{listUPT.map((upt) => (<SelectItem key={upt.id_upt} value={String(upt.id_upt)}>{upt.nama_upt}</SelectItem>))}</SelectContent></Select></div>
+                      {/* REF JENIS LITMAS */}
+                      <div className="grid gap-2">
+                          <Label>Jenis Litmas (ref_jenis_litmas)</Label>
+                          <SearchableSelect options={refJenisLitmas} value={selectedJenisLitmas} onSelect={setSelectedJenisLitmas} labelKey="jenis" valueKey="jenis" placeholder="Pilih Jenis..." searchPlaceholder="Cari jenis..." name="jenis_litmas" />
+                      </div>
+                      {/* REF UPT */}
+                      <div className="grid gap-2">
+                          <Label>Asal UPT (ref_upt)</Label>
+                          <SearchableSelect options={refUpt} value={selectedUpt} onSelect={setSelectedUpt} labelKey="nama_upt" valueKey="id_upt" placeholder="Pilih UPT..." searchPlaceholder="Cari UPT..." name="id_upt" />
+                      </div>
                       <div className="grid gap-2"><Label>Nomor Urut</Label><Input name="nomor_urut" type="number" defaultValue={editingLitmas?.nomor_urut || ''} /></div>
-                      <div className="grid gap-2"><Label>Asal Bapas</Label><Input name="asal_bapas" defaultValue={editingLitmas?.asal_bapas || 'Bapas Kelas I Jakarta Barat'} /></div>
+                      {/* REF BAPAS */}
+                      <div className="grid gap-2">
+                          <Label>Asal Bapas (ref_bapas)</Label>
+                          <SearchableSelect options={refBapas} value={selectedBapas} onSelect={setSelectedBapas} labelKey="nama_bapas" valueKey="nama_bapas" placeholder="Pilih Bapas..." searchPlaceholder="Cari Bapas..." name="asal_bapas" />
+                      </div>
                       <div className="grid gap-2"><Label>Tanggal Registrasi</Label><Input name="tanggal_registrasi" type="date" defaultValue={editingLitmas?.tanggal_registrasi || new Date().toISOString().split('T')[0]} /></div>
                       <div className="grid gap-2"><Label>Nomor Register Litmas</Label><Input name="nomor_register_litmas" defaultValue={editingLitmas?.nomor_register_litmas || ''} placeholder="Reg. Bapas..." /></div>
                       <div className="col-span-2"><Separator className="my-2" /></div>
