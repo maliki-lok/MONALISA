@@ -31,7 +31,7 @@ interface TableConfig {
 const TABLE_CONFIGS: Record<string, TableConfig> = {
   ref_bapas: {
     label: "Referensi Bapas",
-    primaryKey: "id",
+    primaryKey: "id_bapas",
     columns: [
       { key: "nama_bapas", label: "Nama Bapas", type: "text" },
       { key: "wilayah_kerja", label: "Wilayah Kerja", type: "text" }
@@ -39,7 +39,7 @@ const TABLE_CONFIGS: Record<string, TableConfig> = {
   },
   ref_golongan: {
     label: "Referensi Golongan",
-    primaryKey: "id",
+    primaryKey: "id_golongan",
     columns: [
       { key: "kode", label: "Kode Golongan", type: "text" },
       { key: "pangkat", label: "Nama Pangkat", type: "text" }
@@ -47,21 +47,21 @@ const TABLE_CONFIGS: Record<string, TableConfig> = {
   },
   ref_hubungan: {
     label: "Ref. Hubungan Keluarga",
-    primaryKey: "id",
+    primaryKey: "id_hubungan",
     columns: [
       { key: "nama_hubungan", label: "Sebutan Hubungan", type: "text" }
     ]
   },
   ref_kategori_surat: {
     label: "Ref. Kategori Surat",
-    primaryKey: "id",
+    primaryKey: "id_kategori_surat",
     columns: [
       { key: "nama_kategori", label: "Nama Kategori", type: "text" }
     ]
   },
   ref_kecamatan: {
     label: "Ref. Kecamatan",
-    primaryKey: "id",
+    primaryKey: "id_kecamatan",
     columns: [
       { key: "nama_kecamatan", label: "Nama Kecamatan", type: "text" },
       { key: "kota_administrasi", label: "Kota Administrasi", type: "text" }
@@ -69,7 +69,7 @@ const TABLE_CONFIGS: Record<string, TableConfig> = {
   },
   ref_kelurahan: {
     label: "Ref. Kelurahan",
-    primaryKey: "id",
+    primaryKey: "id_kelurahan",
     columns: [
       { key: "nama_kelurahan", label: "Nama Kelurahan", type: "text" },
       // KONFIGURASI RELASI (Sekarang Valid karena Interface diatas)
@@ -78,28 +78,28 @@ const TABLE_CONFIGS: Record<string, TableConfig> = {
         label: "Kecamatan", 
         type: "relation", 
         relationTable: "ref_kecamatan", 
-        relationKey: "id", 
+        relationKey: "id_kecamatan", 
         relationLabel: "nama_kecamatan" 
       } 
     ]
   },
   ref_pekerjaan: {
     label: "Ref. Pekerjaan",
-    primaryKey: "id",
+    primaryKey: "id_pekerjaan",
     columns: [
       { key: "nama_pekerjaan", label: "Nama Pekerjaan", type: "text" }
     ]
   },
   ref_pendidikan: {
     label: "Ref. Pendidikan",
-    primaryKey: "id",
+    primaryKey: "id_pendidikan",
     columns: [
       { key: "tingkat", label: "Tingkat Pendidikan", type: "text" }
     ]
   },
   ref_upt: {
     label: "Ref. UPT (Lapas/Rutan)",
-    primaryKey: "id",
+    primaryKey: "id_upt",
     columns: [
       { key: "nama_upt", label: "Nama UPT", type: "text" },
       { key: "jenis_instansi", label: "Jenis Instansi", type: "text" }
